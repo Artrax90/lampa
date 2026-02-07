@@ -1,7 +1,7 @@
 // ==Lampa==
-// name: IPTV Lite
-// version: 1.0.6
-// description: IPTV плеер (исправлена ошибка Settings.add)
+// name: IPTV Lite Premium
+// version: 1.0.7
+// description: IPTV плеер для Lampa (Стабильная версия)
 // author: Gemini
 // ==/Lampa==
 
@@ -16,11 +16,10 @@
 
         this.create = function () {
             var _this = this;
-            // Используем Lampa.Storage.get напрямую
             var url = Lampa.Storage.get('iptv_m3u_link', '');
 
             if (!url) {
-                items.append('<div class="empty" style="text-align:center;padding:40px">Укажите ссылку на M3U в настройках (Раздел IPTV Lite)</div>');
+                items.append('<div class="empty" style="text-align:center;padding:40px">Укажите ссылку на M3U в настройках (IPTV Lite)</div>');
             } else {
                 Lampa.Loading.show();
                 network.silent(url, function (str) {
@@ -29,7 +28,7 @@
                     Lampa.Loading.hide();
                 }, function () {
                     Lampa.Loading.hide();
-                    Lampa.Noty.show('Не удалось загрузить плейлист');
+                    Lampa.Noty.show('Ошибка загрузки плейлиста');
                 }, false, {dataType: 'text'});
             }
 
@@ -48,7 +47,7 @@
                     current = {};
                     var name = line.match(/,(.*)$/);
                     var group = line.match(/group-title="([^"]+)"/);
-                    current.name = name ? name[1].trim() : 'Без названия';
+                    current.name = name ? name[1].trim() : 'Канал';
                     current.group = group ? group[1] : 'Разное';
                 } else if (line.indexOf('http') === 0 && current) {
                     current.url = line;
@@ -99,50 +98,61 @@
     }
 
     function startPlugin() {
-        // Регистрация компонента
+        console.log('IPTV Lite: Initializing...');
+
+        // Регистрируем компонент
         Lampa.Component.add('iptv_lite', IPTVPlugin);
 
-        // Добавляем пункт в меню
+        // Добавляем пункт в настройки БЕЗОПАСНЫМ способом
+        Lampa.Settings.listener.follow('open', function (e) {
+            if (e.name === 'main') {
+                var folder = $('<div class="settings-folder selector" data-component="iptv_lite_settings"><div class="settings-folder__icon"><svg height="24" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><path d="M21 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2z" fill="white"/></svg></div><div class="settings-folder__name">IPTV Lite</div></div>');
+                folder.on('hover:enter', function () {
+                    Lampa.Settings.create('iptv_lite_settings', 'Настройки IPTV');
+                    
+                    // Добавляем поле ввода через встроенный метод создания параметров
+                    var param = Lampa.Template.get('settings_param_input', {
+                        name: 'iptv_m3u_link',
+                        title: 'M3U Плейлист URL',
+                        placeholder: 'http://...',
+                        value: Lampa.Storage.get('iptv_m3u_link', '')
+                    });
+
+                    param.on('change', function (v) {
+                        Lampa.Storage.set('iptv_m3u_link', v);
+                    });
+
+                    Lampa.Settings.add(param);
+                    Lampa.Controller.enable('settings_iptv_lite_settings');
+                });
+                e.body.find('.settings-main').append(folder);
+            }
+        });
+
+        // Добавляем в меню через нативный API
         Lampa.Menu.add({
             id: 'iptv_lite',
             title: 'IPTV Lite',
             icon: '<svg height="36" viewBox="0 0 24 24" width="36" xmlns="http://www.w3.org/2000/svg"><path d="M10 16.5l6-4.5-6-4.5v9zM12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" fill="white"/></svg>',
             section: 'main',
-            onSelect: function() {
-                Lampa.Activity.push({ title: 'IPTV Lite', component: 'iptv_lite', page: 1 });
-            }
-        });
-
-        // ПРАВИЛЬНАЯ регистрация настроек через Params
-        Lampa.Params.select('iptv_m3u_link', '', 'M3U Link'); // Резервируем имя переменной
-        
-        // Создаем секцию в настройках
-        Lampa.Template.add('settings_iptv_lite', '<div><div class="settings-param selector" data-name="iptv_m3u_link" data-type="input"><div class="settings-param__name">M3U Плейлист URL</div><div class="settings-param__value"></div><div class="settings-param__descr">Введите ссылку на .m3u файл</div></div></div>');
-
-        Lampa.Settings.listener.follow('open', function (e) {
-            if (e.name === 'main') {
-                var item = $('<div class="settings-folder selector" data-component="iptv_lite_settings"><div class="settings-folder__icon"><svg height="24" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><path d="M21 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2z" fill="white"/></svg></div><div class="settings-folder__name">IPTV Lite</div></div>');
-                item.on('hover:enter', function () {
-                    Lampa.Settings.create('iptv_lite_settings', 'IPTV Lite');
-                    Lampa.Settings.add(Lampa.Template.get('settings_iptv_lite', {}));
-                    Lampa.Controller.enable('settings_iptv_lite');
+            onSelect: function () {
+                Lampa.Activity.push({
+                    title: 'IPTV Lite',
+                    component: 'iptv_lite',
+                    page: 1
                 });
-                e.body.find('.settings-main').append(item);
             }
         });
     }
 
+    // Глобальная проверка и запуск
     if (window.Lampa) {
         Lampa.Extensions.add({
-            id: 'iptv_lite',
+            id: 'iptv_lite_ext',
             type: 'plugin',
             onInit: function () {
                 if (window.app_ready) startPlugin();
-                else {
-                    Lampa.Listener.follow('app', function (e) {
-                        if (e.type == 'ready') startPlugin();
-                    });
-                }
+                else Lampa.Listener.follow('app', function (e) { if (e.type === 'ready') startPlugin(); });
             }
         });
     }
