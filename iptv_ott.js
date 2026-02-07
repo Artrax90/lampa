@@ -1,7 +1,7 @@
 // ==Lampa==
 // name: IPTV Lite
-// version: 1.2.4
-// description: IPTV плеер (Proxy & Stack Fix)
+// version: 1.2.5
+// description: IPTV плеер (Security & Native Scroll Fix)
 // author: Gemini
 // ==/Lampa==
 
@@ -10,13 +10,13 @@
 
     function IPTVComponent(object) {
         var _this = this;
-        var scroll = new Lampa.Scroll({mask: true, over: true, check_bottom: true});
+        var scroll = new Lampa.Scroll({mask: true, over: true});
         var items = $('<div class="category-full"></div>');
         var groups = {};
 
         function createItem(title, callback) {
-            var item = $('<div class="selector scroll-item" style="width:100%; padding:18px 25px; background:rgba(255,255,255,0.05); margin-bottom:5px; border-radius:10px; display:flex; justify-content:space-between; align-items:center;">' +
-                            '<span style="font-size:1.3em;">' + title + '</span>' +
+            var item = $('<div class="selector scroll-item" style="width:100%; padding:1.2em 1.5em; background:rgba(255,255,255,0.05); margin-bottom:0.3em; border-radius:0.5em; display:flex; align-items:center; cursor: pointer;">' +
+                            '<span style="font-size:1.2em;">' + title + '</span>' +
                         '</div>');
             item.on('hover:enter', callback);
             return item;
@@ -29,12 +29,12 @@
         };
 
         this.loadPlaylist = function(url) {
-            items.empty().append('<div style="text-align:center; padding:50px;">Загрузка...</div>');
+            items.empty().append('<div style="text-align:center; padding:3em;">Загрузка...</div>');
             
-            // Пытаемся обойти Mixed Content через прокси, если ссылка прямая
+            // Если мы на HTTPS, пробуем и плейлист тянуть через прокси
             var fetch_url = url.trim();
-            if (fetch_url.indexOf('https') === -1 && window.Lampa.Utils.proxyUrl) {
-                fetch_url = Lampa.Utils.proxyUrl(fetch_url);
+            if (window.location.protocol === 'https:' && fetch_url.indexOf('https') === -1) {
+                fetch_url = 'https://corsproxy.io/?' + encodeURIComponent(fetch_url);
             }
 
             $.ajax({
@@ -46,7 +46,7 @@
                     _this.renderGroups();
                 },
                 error: function() {
-                    Lampa.Noty.show('Ошибка доступа к плейлисту');
+                    Lampa.Noty.show('Ошибка загрузки плейлиста');
                     _this.renderInputPage();
                 }
             });
@@ -77,7 +77,7 @@
         this.renderGroups = function () {
             items.empty();
             items.append(createItem('⚙️ Сменить плейлист', function() { _this.renderInputPage(); }));
-            items.append('<div style="height:20px"></div>');
+            items.append('<div style="height:1em"></div>');
 
             Object.keys(groups).sort().forEach(function (gName) {
                 if (gName === 'Все каналы' && Object.keys(groups).length > 2) return;
@@ -90,21 +90,23 @@
 
         this.renderChannels = function (gName) {
             items.empty();
-            items.append(createItem('🔙 Назад', function() { _this.renderGroups(); }));
+            items.append(createItem('🔙 Назад к категориям', function() { _this.renderGroups(); }));
+            items.append('<div style="height:1em"></div>');
 
             groups[gName].forEach(function (chan) {
                 items.append(createItem(chan.name, function() {
                     var final_url = chan.url;
-                    // Исправление Mixed Content для видеопотока
-                    if (location.protocol === 'https:' && final_url.indexOf('https') === -1) {
-                        final_url = 'https://cors-anywhere.herokuapp.com/' + final_url; 
-                        // Или используем внутренний прокси, если доступен
+                    
+                    // ФИКС MIXED CONTENT: Если сайт HTTPS, а видео HTTP - пробуем подменить
+                    if (window.location.protocol === 'https:' && final_url.indexOf('https') === -1) {
+                        final_url = final_url.replace('http://', 'https://');
                     }
                     
                     Lampa.Player.play({
-                        url: chan.url,
+                        url: final_url,
                         title: chan.name
                     });
+                    Lampa.Player.playlist([{url: final_url, title: chan.name}]);
                 }));
             });
             this.refresh();
@@ -112,25 +114,37 @@
 
         this.renderInputPage = function() {
             items.empty();
-            var btn = createItem('➕ Ввести ссылку на M3U', function() {
+            items.append(createItem('➕ Ввести ссылку на M3U', function() {
                 Lampa.Input.edit({ value: Lampa.Storage.get('iptv_m3u_link', ''), free: true }, function(new_val) {
                     if(new_val) {
                         Lampa.Storage.set('iptv_m3u_link', new_val);
                         _this.loadPlaylist(new_val);
                     }
                 });
-            });
-            items.append(btn);
+            }));
             this.refresh();
         };
 
         this.refresh = function() {
             scroll.clear();
             scroll.append(items);
+            // Регистрация в контроллере для скролла пультом
+            Lampa.Controller.add('content', {
+                toggle: function () {
+                    Lampa.Controller.enable('content');
+                },
+                up: function () {
+                    Lampa.Navigator.move('up');
+                },
+                down: function () {
+                    Lampa.Navigator.move('down');
+                },
+                back: function () {
+                    Lampa.Activity.backward();
+                }
+            });
             Lampa.Controller.enable('content');
-            setTimeout(function() {
-                scroll.update();
-            }, 10);
+            setTimeout(scroll.update.bind(scroll), 100);
         };
 
         this.render = function () { return scroll.render(); };
