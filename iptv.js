@@ -1,7 +1,7 @@
 // ==Lampa==
-// name: IPTV TiviMate Visual
-// version: 1.5.0
-// description: IPTV plugin with TiviMate-like UI (stable visual update)
+// name: IPTV TiviMate Visual Plus
+// version: 1.6.0
+// description: IPTV plugin (favorites, search, improved EPG, stable)
 // author: Artrax90
 // ==/Lampa==
 
@@ -13,84 +13,41 @@
 
         var root = $('<div class="tm-root"></div>');
         var groupsBox = $('<div class="tm-groups"></div>');
+        var channelsWrap = $('<div class="tm-channels-wrap"></div>');
+        var searchBox = $('<input class="tm-search" placeholder="Поиск канала...">');
         var channelsBox = $('<div class="tm-channels"></div>');
 
-        root.append(groupsBox, channelsBox);
+        channelsWrap.append(searchBox, channelsBox);
+        root.append(groupsBox, channelsWrap);
 
         var groups = {};
+        var allChannels = [];
+        var currentList = [];
+        var favorites = Lampa.Storage.get('iptv_fav', []);
 
         /* ================= STYLES ================= */
 
         if (!$('#tm-style').length) {
             $('head').append(`
             <style id="tm-style">
-            .tm-root{
-                display:flex;
-                height:100vh;
-                background:radial-gradient(circle at top,#15171c 0%,#050607 60%);
-                color:#fff;
-                font-family:Roboto,Arial;
-            }
-            .tm-groups{
-                width:260px;
-                padding:16px;
-                background:#0b0d10;
-                overflow:auto;
-            }
-            .tm-group{
-                padding:14px 16px;
-                border-radius:10px;
-                margin-bottom:8px;
-                background:#15181d;
-                font-size:1.05em;
-            }
-            .tm-group.focus{
-                background:linear-gradient(135deg,#2962ff,#2979ff);
-                transform:scale(1.03);
-            }
-            .tm-channels{
-                flex:1;
-                padding:20px;
-                overflow:auto;
-            }
-            .tm-channel{
-                display:flex;
-                align-items:center;
-                padding:14px;
-                border-radius:12px;
-                margin-bottom:10px;
-                background:#12151a;
-            }
-            .tm-channel.focus{
-                background:#1e232b;
-                transform:scale(1.01);
-            }
-            .tm-channel img{
-                width:64px;
-                height:36px;
-                object-fit:contain;
-                background:#000;
-                border-radius:6px;
-                margin-right:16px;
-            }
-            .tm-name{
-                font-size:1.1em;
-                font-weight:500;
-                flex:1;
-            }
-            .tm-epg{
-                font-size:.9em;
-                opacity:.6;
-                max-width:40%;
-                white-space:nowrap;
-                overflow:hidden;
-                text-overflow:ellipsis;
-            }
+            .tm-root{display:flex;height:100vh;background:radial-gradient(circle at top,#15171c 0%,#050607 60%);color:#fff;font-family:Roboto,Arial}
+            .tm-groups{width:260px;padding:16px;background:#0b0d10;overflow:auto}
+            .tm-group{padding:14px 16px;border-radius:10px;margin-bottom:8px;background:#15181d}
+            .tm-group.focus{background:linear-gradient(135deg,#2962ff,#2979ff);transform:scale(1.03)}
+            .tm-channels-wrap{flex:1;padding:20px;display:flex;flex-direction:column}
+            .tm-search{margin-bottom:14px;padding:10px 14px;border-radius:10px;border:none;font-size:1em}
+            .tm-channels{overflow:auto}
+            .tm-channel{display:flex;align-items:center;padding:14px;border-radius:12px;margin-bottom:10px;background:#12151a}
+            .tm-channel.focus{background:#1e232b;transform:scale(1.01)}
+            .tm-channel img{width:64px;height:36px;object-fit:contain;background:#000;border-radius:6px;margin-right:16px}
+            .tm-name{font-size:1.1em;flex:1}
+            .tm-epg{font-size:.9em;opacity:.6;max-width:40%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+            .tm-star{color:#ffcc00;margin-right:10px}
             </style>
             `);
         }
 
-        /* ================= LOGIC (НЕ МЕНЯЛИ) ================= */
+        /* ================= LOGIC ================= */
 
         this.create = function () {
             var url = Lampa.Storage.get('iptv_m3u_link', '');
@@ -116,7 +73,9 @@
         };
 
         this.parse = function (str) {
-            groups = { 'ВСЕ КАНАЛЫ': [] };
+            groups = { '⭐ ИЗБРАННОЕ': [] };
+            allChannels = [];
+
             var lines = str.split('\n');
             var cur = null;
 
@@ -132,9 +91,14 @@
                 }
                 else if (l.indexOf('http') === 0 && cur) {
                     cur.url = l;
+                    allChannels.push(cur);
+
                     if (!groups[cur.group]) groups[cur.group] = [];
                     groups[cur.group].push(cur);
-                    groups['ВСЕ КАНАЛЫ'].push(cur);
+
+                    if (favorites.includes(cur.name)) {
+                        groups['⭐ ИЗБРАННОЕ'].push(cur);
+                    }
                     cur = null;
                 }
             });
@@ -143,10 +107,15 @@
         this.renderGroups = function () {
             groupsBox.empty();
 
-            Object.keys(groups).sort().forEach(function (g) {
+            $('<div class="selector tm-group">⚙ ПЛЕЙЛИСТ</div>')
+                .on('hover:enter', function () { _this.renderSettings(); })
+                .appendTo(groupsBox);
+
+            Object.keys(groups).forEach(function (g) {
                 var btn = $('<div class="selector tm-group">' + g + '</div>');
                 btn.on('hover:enter', function () {
-                    _this.renderList(groups[g]);
+                    currentList = groups[g];
+                    _this.renderList(currentList);
                 });
                 groupsBox.append(btn);
             });
@@ -155,20 +124,26 @@
         };
 
         this.renderList = function (list) {
+            currentList = list;
             channelsBox.empty();
 
             list.forEach(function (chan) {
-                var epg = 'Программа загружается...';
+                var epg = 'Нет данных';
                 try {
                     if (Lampa.TV) {
                         var data = Lampa.TV.getEPG(chan.id || chan.name);
-                        if (data && data.current) epg = data.current.title;
+                        if (data && data.current && data.current.title) {
+                            epg = data.current.title;
+                        }
                     }
                 } catch (e) {}
+
+                var isFav = favorites.includes(chan.name);
 
                 var row = $(`
                     <div class="selector tm-channel">
                         <img src="${chan.logo}" onerror="this.style.display='none'">
+                        ${isFav ? '<div class="tm-star">★</div>' : '<div class="tm-star"></div>'}
                         <div class="tm-name">${chan.name}</div>
                         <div class="tm-epg">${epg}</div>
                     </div>
@@ -178,11 +153,27 @@
                     Lampa.Player.play({ url: chan.url, title: chan.name });
                 });
 
+                row.on('keydown', function (e) {
+                    if (e.keyCode === 13) {
+                        if (isFav) favorites = favorites.filter(f => f !== chan.name);
+                        else favorites.push(chan.name);
+                        Lampa.Storage.set('iptv_fav', favorites);
+                        _this.renderGroups();
+                        _this.renderList(currentList);
+                    }
+                });
+
                 channelsBox.append(row);
             });
 
             this.focus(channelsBox);
         };
+
+        searchBox.on('input', function () {
+            var val = this.value.toLowerCase();
+            var filtered = currentList.filter(c => c.name.toLowerCase().includes(val));
+            _this.renderList(filtered);
+        });
 
         this.renderSettings = function () {
             Lampa.Input.edit({
@@ -214,17 +205,14 @@
         Lampa.Component.add('iptv_lite', IPTVComponent);
 
         var btn = $(`
-            <li class="menu__item selector" data-action="iptv_lite">
+            <li class="menu__item selector">
                 <div class="menu__ico">📺</div>
                 <div class="menu__text">IPTV</div>
             </li>
         `);
 
         btn.on('hover:enter', function () {
-            Lampa.Activity.push({
-                title: 'IPTV',
-                component: 'iptv_lite'
-            });
+            Lampa.Activity.push({ title: 'IPTV', component: 'iptv_lite' });
         });
 
         $('.menu .menu__list').append(btn);
