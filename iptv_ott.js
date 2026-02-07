@@ -1,7 +1,7 @@
 // ==Lampa==
 // name: IPTV Lite
-// version: 1.2.5
-// description: IPTV плеер (Security & Native Scroll Fix)
+// version: 1.2.6
+// description: IPTV плеер (CSS Scroll & Fix Navigator)
 // author: Gemini
 // ==/Lampa==
 
@@ -10,13 +10,23 @@
 
     function IPTVComponent(object) {
         var _this = this;
-        var scroll = new Lampa.Scroll({mask: true, over: true});
-        var items = $('<div class="category-full"></div>');
+        // Создаем контейнер с CSS-скроллом
+        var items = $('<div class="iptv-lite-content" style="width:100%; height: 80vh; overflow-y: auto; padding-right: 10px;"></div>');
         var groups = {};
 
+        // Стили для фокуса и плавной прокрутки
+        if (!$('#iptv-lite-styles').length) {
+            $('head').append('<style id="iptv-lite-styles">' +
+                '.iptv-lite-content::-webkit-scrollbar { width: 6px; }' +
+                '.iptv-lite-content::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 10px; }' +
+                '.iptv-item.focus { background: #fff !important; color: #000 !important; transform: scale(1.02); }' +
+                '.iptv-item { transition: all 0.2s; }' +
+                '</style>');
+        }
+
         function createItem(title, callback) {
-            var item = $('<div class="selector scroll-item" style="width:100%; padding:1.2em 1.5em; background:rgba(255,255,255,0.05); margin-bottom:0.3em; border-radius:0.5em; display:flex; align-items:center; cursor: pointer;">' +
-                            '<span style="font-size:1.2em;">' + title + '</span>' +
+            var item = $('<div class="selector iptv-item" style="width:100%; padding:18px 25px; background:rgba(255,255,255,0.05); margin-bottom:8px; border-radius:12px; display:flex; align-items:center; cursor: pointer;">' +
+                            '<span style="font-size:1.3em;">' + title + '</span>' +
                         '</div>');
             item.on('hover:enter', callback);
             return item;
@@ -29,10 +39,10 @@
         };
 
         this.loadPlaylist = function(url) {
-            items.empty().append('<div style="text-align:center; padding:3em;">Загрузка...</div>');
+            items.empty().append('<div style="text-align:center; padding:50px;">Загрузка каналов...</div>');
             
-            // Если мы на HTTPS, пробуем и плейлист тянуть через прокси
             var fetch_url = url.trim();
+            // Прокси для плейлиста
             if (window.location.protocol === 'https:' && fetch_url.indexOf('https') === -1) {
                 fetch_url = 'https://corsproxy.io/?' + encodeURIComponent(fetch_url);
             }
@@ -76,8 +86,8 @@
 
         this.renderGroups = function () {
             items.empty();
-            items.append(createItem('⚙️ Сменить плейлист', function() { _this.renderInputPage(); }));
-            items.append('<div style="height:1em"></div>');
+            items.append(createItem('⚙️ Настройки', function() { _this.renderInputPage(); }));
+            items.append('<div style="height:20px"></div>');
 
             Object.keys(groups).sort().forEach(function (gName) {
                 if (gName === 'Все каналы' && Object.keys(groups).length > 2) return;
@@ -90,22 +100,17 @@
 
         this.renderChannels = function (gName) {
             items.empty();
-            items.append(createItem('🔙 Назад к категориям', function() { _this.renderGroups(); }));
-            items.append('<div style="height:1em"></div>');
+            items.append(createItem('🔙 Назад', function() { _this.renderGroups(); }));
+            items.append('<div style="height:20px"></div>');
 
             groups[gName].forEach(function (chan) {
                 items.append(createItem(chan.name, function() {
                     var final_url = chan.url;
-                    
-                    // ФИКС MIXED CONTENT: Если сайт HTTPS, а видео HTTP - пробуем подменить
+                    // Если HTTPS сайт, пробуем подменить на https поток
                     if (window.location.protocol === 'https:' && final_url.indexOf('https') === -1) {
                         final_url = final_url.replace('http://', 'https://');
                     }
-                    
-                    Lampa.Player.play({
-                        url: final_url,
-                        title: chan.name
-                    });
+                    Lampa.Player.play({ url: final_url, title: chan.name });
                     Lampa.Player.playlist([{url: final_url, title: chan.name}]);
                 }));
             });
@@ -126,32 +131,22 @@
         };
 
         this.refresh = function() {
-            scroll.clear();
-            scroll.append(items);
-            // Регистрация в контроллере для скролла пультом
-            Lampa.Controller.add('content', {
-                toggle: function () {
-                    Lampa.Controller.enable('content');
-                },
-                up: function () {
-                    Lampa.Navigator.move('up');
-                },
-                down: function () {
-                    Lampa.Navigator.move('down');
-                },
-                back: function () {
-                    Lampa.Activity.backward();
-                }
-            });
             Lampa.Controller.enable('content');
-            setTimeout(scroll.update.bind(scroll), 100);
+            // Прокручиваем в начало при смене категории
+            items.scrollTop(0); 
+            setTimeout(function() {
+                var first = items.find('.selector').first();
+                if(first.length) Lampa.Controller.focus(first[0]);
+            }, 100);
         };
 
-        this.render = function () { return scroll.render(); };
+        // Возвращаем чистый DOM без обертки Lampa.Scroll
+        this.render = function () { return items; };
+        
         this.pause = function () {};
         this.stop = function () {};
         this.start = function () {};
-        this.destroy = function () { scroll.destroy(); items.remove(); };
+        this.destroy = function () { items.remove(); };
     }
 
     function init() {
