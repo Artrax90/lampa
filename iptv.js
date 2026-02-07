@@ -1,6 +1,6 @@
 // ==Lampa==
-// name: IPTV Stable (before kulik)
-// version: 3.9.0
+// name: IPTV Stable + Logos + EPG
+// version: 4.0.0
 // author: Artrax90
 // ==/Lampa==
 
@@ -22,9 +22,9 @@
         var all = [];
 
         /* ===== STYLE ===== */
-        if (!$('#iptv-style-stable-old').length) {
+        if (!$('#iptv-style-stable-logos').length) {
             $('head').append(`
-            <style id="iptv-style-stable-old">
+            <style id="iptv-style-stable-logos">
             .iptv-root{display:flex;height:100vh;background:#0b0d10;color:#fff}
             .iptv-col{overflow:auto}
             .g{width:260px;padding:14px;background:#0e1116}
@@ -36,7 +36,7 @@
 
             .chan{display:flex;align-items:center}
             .logo{width:64px;height:36px;background:#000;border-radius:8px;margin-right:14px;display:flex;align-items:center;justify-content:center}
-            .logo img{max-width:90%;max-height:90%}
+            .logo img{max-width:100%;max-height:100%;object-fit:contain}
 
             .name{font-size:1.05em}
             .sub{font-size:.85em;color:#9aa0a6;margin-top:4px}
@@ -140,6 +140,12 @@
             focus(colG);
         }
 
+        function channelLogo(c){
+            if (c.logo) return c.logo;
+            if (c.id) return 'https://iptvx.one/logo/' + c.id + '.png';
+            return 'https://bylampa.github.io/img/iptv.png';
+        }
+
         function renderChannels(list) {
             colC.empty();
             colE.empty();
@@ -155,12 +161,11 @@
                     </div>
                 `);
 
-                row.find('img').attr(
-                    'src',
-                    c.logo || (c.id ? 'https://iptvx.one/logo/' + c.id + '.png' : 'https://bylampa.github.io/img/iptv.png')
-                ).on('error', function () {
-                    this.src = 'https://bylampa.github.io/img/iptv.png';
-                });
+                row.find('img')
+                    .attr('src', channelLogo(c))
+                    .on('error', function () {
+                        this.src = 'https://bylampa.github.io/img/iptv.png';
+                    });
 
                 row.on('hover:focus', function () {
                     updateInfo(c);
@@ -170,7 +175,9 @@
                     Lampa.Player.play({
                         url: c.url,
                         title: c.name,
-                        type: 'tv'
+                        type: 'tv',
+                        epg: true,
+                        epg_id: c.id || c.name
                     });
                 });
 
@@ -184,26 +191,18 @@
             colE.empty();
             $('<div class="et">' + c.name + '</div>').appendTo(colE);
 
-            var epgText = 'Программа доступна в плеере';
+            var text = 'Запустите канал для загрузки программы';
             try {
                 if (Lampa.TV && Lampa.TV.getEPG) {
                     var e = Lampa.TV.getEPG(c.id || c.name);
-                    if (e && e.current) epgText = 'Сейчас: ' + e.current.title;
+                    if (e && e.current) {
+                        text = 'Сейчас: ' + e.current.title;
+                        if (e.current.time) text += ' (' + e.current.time + ')';
+                    }
                 }
             } catch (e) {}
 
-            $('<div class="er">' + epgText + '</div>').appendTo(colE);
-
-            $('<div class="selector item">' +
-                (fav.includes(c.name) ? '⭐ Убрать из избранного' : '⭐ В избранное') +
-              '</div>')
-                .on('hover:enter', function () {
-                    if (fav.includes(c.name)) fav = fav.filter(x => x !== c.name);
-                    else fav.push(c.name);
-                    Lampa.Storage.set('iptv_fav', fav);
-                    groups['⭐ Избранное'] = all.filter(x => fav.includes(x.name));
-                })
-                .appendTo(colE);
+            $('<div class="er">' + text + '</div>').appendTo(colE);
         }
     }
 
