@@ -1,11 +1,17 @@
 // ==Lampa==
-// name: IPTV Stable + Logos + EPG
-// version: 4.0.0
+// name: IPTV Stable + Default Playlist
+// version: 4.1.0
 // author: Artrax90
 // ==/Lampa==
 
 (function () {
     'use strict';
+
+    /* ===== DEFAULT PLAYLIST ===== */
+    var DEFAULT_PLAYLIST = {
+        name: 'LoganetTV MEGA',
+        url: 'https://raw.githubusercontent.com/loganettv/playlists/refs/heads/main/mega.m3u'
+    };
 
     function IPTVComponent() {
         var root = $('<div class="iptv-root"></div>');
@@ -14,17 +20,25 @@
         var colE = $('<div class="iptv-col e"></div>');
         root.append(colG, colC, colE);
 
-        var playlists = Lampa.Storage.get('iptv_pl', []);
+        /* ===== STORAGE INIT ===== */
+        var playlists = Lampa.Storage.get('iptv_pl', null);
         var active = Lampa.Storage.get('iptv_pl_a', 0);
         var fav = Lampa.Storage.get('iptv_fav', []);
+
+        if (!Array.isArray(playlists) || !playlists.length) {
+            playlists = [DEFAULT_PLAYLIST];
+            active = 0;
+            Lampa.Storage.set('iptv_pl', playlists);
+            Lampa.Storage.set('iptv_pl_a', active);
+        }
 
         var groups = {};
         var all = [];
 
         /* ===== STYLE ===== */
-        if (!$('#iptv-style-stable-logos').length) {
+        if (!$('#iptv-style-default').length) {
             $('head').append(`
-            <style id="iptv-style-stable-logos">
+            <style id="iptv-style-default">
             .iptv-root{display:flex;height:100vh;background:#0b0d10;color:#fff}
             .iptv-col{overflow:auto}
             .g{width:260px;padding:14px;background:#0e1116}
@@ -35,7 +49,8 @@
             .item.focus{background:#2962ff}
 
             .chan{display:flex;align-items:center}
-            .logo{width:64px;height:36px;background:#000;border-radius:8px;margin-right:14px;display:flex;align-items:center;justify-content:center}
+            .logo{width:64px;height:36px;background:#000;border-radius:8px;margin-right:14px;
+                  display:flex;align-items:center;justify-content:center}
             .logo img{max-width:100%;max-height:100%;object-fit:contain}
 
             .name{font-size:1.05em}
@@ -57,7 +72,7 @@
 
         this.create = function () {
             renderGroups();
-            if (playlists.length) loadPlaylist();
+            loadPlaylist();
         };
 
         this.render = function () {
@@ -76,7 +91,11 @@
                     u = u.trim();
                     if (!u) return;
 
-                    playlists.push({ name: 'Плейлист ' + (playlists.length + 1), url: u });
+                    playlists.push({
+                        name: 'Плейлист ' + (playlists.length + 1),
+                        url: u
+                    });
+
                     Lampa.Storage.set('iptv_pl', playlists);
                     active = playlists.length - 1;
                     Lampa.Storage.set('iptv_pl_a', active);
