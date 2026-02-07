@@ -1,7 +1,7 @@
 // ==Lampa==
 // name: IPTV Lite
-// version: 1.2.1
-// description: IPTV плеер (Scroll & Playback Deep Fix)
+// version: 1.2.2
+// description: IPTV плеер (Scroll & Focus Engine Fix)
 // author: Gemini
 // ==/Lampa==
 
@@ -9,13 +9,12 @@
     'use strict';
 
     function IPTVComponent(object) {
-        var scroll = new Lampa.Scroll({mask: true, over: true, check_bottom: true});
+        var scroll = new Lampa.Scroll({mask: true, over: true});
         var items = $('<div class="category-full"></div>');
         var groups = {};
-        var last_focus;
 
         function createButton(title, callback) {
-            var btn = $('<div class="selector scroll-item" style="width:100%; padding:18px 25px; background:rgba(255,255,255,0.05); margin-bottom:8px; border-radius:12px; display:flex; justify-content:space-between; align-items:center;">' +
+            var btn = $('<div class="selector scroll-item" style="width:100%; padding:18px 25px; background:rgba(255,255,255,0.05); margin-bottom:8px; border-radius:12px; display:flex; justify-content:space-between; align-items:center; cursor: pointer;">' +
                             '<span style="font-size:1.3em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-right:10px;">' + title + '</span>' +
                             '<span style="opacity:0.4; font-size:1.2em;">&rsaquo;</span>' +
                         '</div>');
@@ -34,20 +33,13 @@
             items.empty();
             var current_url = Lampa.Storage.get('iptv_m3u_link', '');
             
-            var ui = $(
-                '<div style="text-align:center; padding:40px;">' +
-                    '<div style="font-size:1.6em; margin-bottom:30px;">Настройка IPTV</div>' +
-                    '<div style="max-width:600px; margin:0 auto;">' +
-                        '<div class="selector" id="iptv_open_keyboard" style="width:100%; padding:20px; background:rgba(255,255,255,0.1); border-radius:15px; margin-bottom:20px; word-break:break-all; min-height:60px; border: 1px solid rgba(255,255,255,0.2);">' + 
-                            (current_url || 'Нажмите, чтобы ввести ссылку') + 
-                        '</div>' +
-                        '<div class="selector iptv-save-btn" style="background:#fff; color:#000; padding:15px 40px; border-radius:30px; display:inline-block; font-weight:bold; margin: 10px;">Загрузить</div>' +
-                        (current_url ? '<div class="selector iptv-reset-btn" style="background:rgba(255,0,0,0.3); color:#fff; padding:15px 40px; border-radius:30px; display:inline-block; font-weight:bold; margin: 10px;">Очистить</div>' : '') +
-                    '</div>' +
-                '</div>'
-            );
+            var ui = $('<div style="text-align:center; padding:40px;">' +
+                        '<div style="font-size:1.6em; margin-bottom:30px;">Настройка IPTV</div>' +
+                        '<div class="selector" id="iptv_url_field" style="width:100%; padding:20px; background:rgba(255,255,255,0.1); border-radius:15px; margin-bottom:20px; word-break:break-all;">' + (current_url || 'Нажмите для ввода ссылки') + '</div>' +
+                        '<div class="selector iptv-save-btn" style="background:#fff; color:#000; padding:15px 40px; border-radius:30px; display:inline-block; font-weight:bold;">Загрузить</div>' +
+                      '</div>');
 
-            ui.find('#iptv_open_keyboard').on('hover:enter', function() {
+            ui.find('#iptv_url_field').on('hover:enter', function() {
                 Lampa.Input.edit({ value: Lampa.Storage.get('iptv_m3u_link', ''), free: true }, function(new_val) {
                     if(new_val) {
                         Lampa.Storage.set('iptv_m3u_link', new_val);
@@ -60,29 +52,16 @@
                 _this.loadPlaylist(Lampa.Storage.get('iptv_m3u_link', ''));
             });
 
-            ui.find('.iptv-reset-btn').on('hover:enter', function() {
-                Lampa.Storage.set('iptv_m3u_link', '');
-                _this.renderInputPage();
-            });
-
             items.append(ui);
             this.refreshContent();
         };
 
         this.loadPlaylist = function(url) {
             var _this = this;
-            if(!url) return this.renderInputPage();
-            
-            items.empty();
-            items.append('<div style="text-align:center; padding:50px; font-size:1.4em;">Загрузка...</div>');
-
-            var final_url = url.trim();
-            if (window.Lampa && Lampa.Utils && Lampa.Utils.proxyUrl) {
-                final_url = Lampa.Utils.proxyUrl(final_url);
-            }
+            items.empty().append('<div style="text-align:center; padding:50px;">Загрузка каналов...</div>');
 
             $.ajax({
-                url: final_url,
+                url: url.trim(),
                 method: 'GET',
                 dataType: 'text',
                 timeout: 15000,
@@ -91,7 +70,7 @@
                     _this.renderGroups();
                 },
                 error: function() {
-                    Lampa.Noty.show('Ошибка загрузки плейлиста');
+                    Lampa.Noty.show('Ошибка загрузки. Проверьте ссылку.');
                     _this.renderInputPage();
                 }
             });
@@ -123,8 +102,7 @@
             var _this = this;
             items.empty();
             items.append(createButton('⚙️ Настройки', function() { _this.renderInputPage(); }));
-            items.append('<div style="height:20px"></div>');
-
+            
             Object.keys(groups).sort().forEach(function (gName) {
                 if (gName === 'Все каналы' && Object.keys(groups).length > 2) return;
                 items.append(createButton(gName + ' (' + groups[gName].length + ')', function() {
@@ -138,16 +116,14 @@
             var _this = this;
             items.empty();
             items.append(createButton('← Назад', function() { _this.renderGroups(); }));
-            items.append('<div style="height:20px"></div>');
 
             groups[gName].forEach(function (chan) {
                 items.append(createButton(chan.name, function() {
                     var video = {
                         url: chan.url,
                         title: chan.name,
-                        import: true // Попытка задействовать расширенные декодеры
+                        lampa: true
                     };
-                    Lampa.Player.stop(); // Очистить старый сеанс
                     Lampa.Player.play(video);
                     Lampa.Player.playlist([video]);
                 }));
@@ -156,18 +132,20 @@
         };
 
         this.refreshContent = function() {
-            scroll.clear(); // Сбросить старое состояние скролла
+            scroll.clear();
             scroll.append(items);
-            Lampa.Controller.enable('content');
             
-            // Защита от ошибки getBoundingClientRect
-            if(items.find('.selector').length) {
-                setTimeout(function() {
+            // Вместо мгновенного update, даем DOM-дереву "продышаться"
+            Lampa.Controller.enable('content');
+            setTimeout(function() {
+                try {
                     scroll.update();
-                    // Автофокус на первый элемент, если ничего не выбрано
-                    Lampa.Controller.focus(items.find('.selector').first()[0]);
-                }, 50);
-            }
+                    var first = items.find('.selector').first();
+                    if(first.length) Lampa.Controller.focus(first[0]);
+                } catch(e) {
+                    console.log('Scroll update postponed');
+                }
+            }, 200);
         };
 
         this.render = function () { return scroll.render(); };
