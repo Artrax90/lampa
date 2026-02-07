@@ -1,7 +1,7 @@
 // ==Lampa==
-// name: IPTV TiviMate Visual Fixed
-// version: 1.8.0
-// description: IPTV plugin (multi playlists, long-press favorites, proper search)
+// name: IPTV TiviMate Visual Fixed v2
+// version: 1.9.0
+// description: IPTV plugin (multi playlists, working favorites, working search)
 // author: Artrax90
 // ==/Lampa==
 
@@ -18,7 +18,9 @@
         var favorites = Lampa.Storage.get('iptv_fav', []);
 
         var groups = {};
-        var currentGroup = [];
+        var allChannels = [];
+        var currentList = [];
+
         var pressTimer = null;
 
         /* ================= UI ================= */
@@ -52,28 +54,34 @@
 
         this.create = function () {
             if (!playlists.length) {
-                addPlaylist();
+                requestAddPlaylist();
             } else {
                 loadActive();
             }
         };
 
-        function addPlaylist() {
+        function requestAddPlaylist() {
             Lampa.Input.edit({
                 title: 'Добавить плейлист (URL)',
                 value: '',
                 free: true
             }, function (url) {
                 if (!url) return;
-                playlists.push({ name: 'Плейлист ' + (playlists.length + 1), url: url });
+
+                playlists.push({
+                    name: 'Плейлист ' + (playlists.length + 1),
+                    url: url
+                });
+
                 Lampa.Storage.set('iptv_playlists', playlists);
                 activeIndex = playlists.length - 1;
                 Lampa.Storage.set('iptv_active_playlist', activeIndex);
+
                 loadActive();
             });
         }
 
-        function playlistMenu() {
+        function showPlaylistMenu() {
             var items = playlists.map(function (p, i) {
                 return {
                     title: (i === activeIndex ? '✔ ' : '') + p.name,
@@ -87,7 +95,9 @@
 
             items.push({
                 title: '➕ Добавить плейлист',
-                onClick: addPlaylist
+                onClick: function () {
+                    setTimeout(requestAddPlaylist, 50);
+                }
             });
 
             Lampa.Select.show({
@@ -102,13 +112,20 @@
                 url: pl.url,
                 success: function (str) {
                     parse(str);
+                    rebuildFavoritesGroup();
                     renderGroups();
                 },
                 error: function () {
                     $.ajax({
                         url: 'https://corsproxy.io/?' + encodeURIComponent(pl.url),
-                        success: function (s) { parse(s); renderGroups(); },
-                        error: function () { Lampa.Noty.show('Ошибка загрузки плейлиста'); }
+                        success: function (s) {
+                            parse(s);
+                            rebuildFavoritesGroup();
+                            renderGroups();
+                        },
+                        error: function () {
+                            Lampa.Noty.show('Ошибка загрузки плейлиста');
+                        }
                     });
                 }
             });
@@ -116,6 +133,8 @@
 
         function parse(str) {
             groups = { '⭐ ИЗБРАННОЕ': [] };
+            allChannels = [];
+
             var cur = null;
 
             str.split('\n').forEach(function (l) {
@@ -128,11 +147,17 @@
                     };
                 } else if (l.indexOf('http') === 0 && cur) {
                     cur.url = l;
+                    allChannels.push(cur);
                     if (!groups[cur.group]) groups[cur.group] = [];
                     groups[cur.group].push(cur);
-                    if (favorites.includes(cur.name)) groups['⭐ ИЗБРАННОЕ'].push(cur);
                     cur = null;
                 }
+            });
+        }
+
+        function rebuildFavoritesGroup() {
+            groups['⭐ ИЗБРАННОЕ'] = allChannels.filter(function (c) {
+                return favorites.includes(c.name);
             });
         }
 
@@ -140,18 +165,18 @@
             groupsBox.empty();
 
             $('<div class="selector tm-group">📂 ПЛЕЙЛИСТЫ</div>')
-                .on('hover:enter', playlistMenu)
+                .on('hover:enter', showPlaylistMenu)
                 .appendTo(groupsBox);
 
             $('<div class="selector tm-group">🔍 ПОИСК</div>')
-                .on('hover:enter', search)
+                .on('hover:enter', startSearch)
                 .appendTo(groupsBox);
 
             Object.keys(groups).forEach(function (g) {
                 $('<div class="selector tm-group">' + g + '</div>')
                     .on('hover:enter', function () {
-                        currentGroup = groups[g];
-                        renderList(currentGroup);
+                        currentList = groups[g];
+                        renderList(currentList);
                     })
                     .appendTo(groupsBox);
             });
@@ -161,7 +186,7 @@
 
         function renderList(list) {
             channelsBox.empty();
-            currentGroup = list;
+            currentList = list;
 
             list.forEach(function (chan) {
                 var isFav = favorites.includes(chan.name);
@@ -176,9 +201,10 @@
 
                 row.on('hover:enter', function () {
                     pressTimer = setTimeout(function () {
-                        toggleFav(chan);
+                        toggleFavorite(chan);
+                        rebuildFavoritesGroup();
                         renderGroups();
-                        renderList(currentGroup);
+                        renderList(currentList);
                     }, 700);
                 });
 
@@ -196,16 +222,16 @@
             focus(channelsBox);
         }
 
-        function toggleFav(chan) {
-            if (favorites.includes(chan.name))
+        function toggleFavorite(chan) {
+            if (favorites.includes(chan.name)) {
                 favorites = favorites.filter(f => f !== chan.name);
-            else
+            } else {
                 favorites.push(chan.name);
-
+            }
             Lampa.Storage.set('iptv_fav', favorites);
         }
 
-        function search() {
+        function startSearch() {
             Lampa.Input.edit({
                 title: 'Поиск канала',
                 value: '',
@@ -213,7 +239,9 @@
             }, function (v) {
                 if (!v) return;
                 var q = v.toLowerCase();
-                var result = currentGroup.filter(c => c.name.toLowerCase().includes(q));
+                var result = allChannels.filter(function (c) {
+                    return c.name.toLowerCase().includes(q);
+                });
                 renderList(result);
             });
         }
