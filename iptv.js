@@ -1,6 +1,6 @@
 // ==Lampa==
-// name: IPTV TiviMate EPG Right (FIXED)
-// version: 4.1.1
+// name: IPTV TiviMate EPG Right (STABLE)
+// version: 4.2.0
 // author: Artrax90
 // ==/Lampa==
 
@@ -29,9 +29,9 @@
     var epgProg = {};
 
     /* ---------- STYLE ---------- */
-    if (!$('#iptv-style-fix').length) {
+    if (!$('#iptv-style-stable').length) {
       $('head').append(`
-      <style id="iptv-style-fix">
+      <style id="iptv-style-stable">
       .iptv-root{display:flex;height:100vh;background:#0b0d10;color:#fff}
       .iptv-col{overflow:auto}
       .g{width:260px;padding:14px;background:#0e1116}
@@ -49,7 +49,6 @@
       </style>`);
     }
 
-    /* ---------- HELPERS ---------- */
     function focus(box){
       Lampa.Controller.enable('content');
       var f = box.find('.selector').first();
@@ -57,11 +56,10 @@
     }
 
     function parseTime(t){
-      var m=t.match(/(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})/);
+      var m=t && t.match(/(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})/);
       return m ? Date.UTC(m[1],m[2]-1,m[3],m[4],m[5],m[6]) : 0;
     }
 
-    /* ---------- XMLTV ---------- */
     function loadEPG(cb){
       if(epgReady) return cb();
       $.ajax({
@@ -101,7 +99,6 @@
       return null;
     }
 
-    /* ---------- CORE ---------- */
     this.create=function(){
       if(!playlists.length) return addPL();
       loadPL();
@@ -110,19 +107,21 @@
     this.start=function(){focus(colG)};
 
     function addPL(){
-      Lampa.Input.edit({title:'Плейлист URL',free:true},function(u){
-        if(!u)return;
-        playlists.push({name:'Playlist '+(playlists.length+1),url:u});
-        Lampa.Storage.set('iptv_pl',playlists);
-        active=playlists.length-1;
-        Lampa.Storage.set('iptv_pl_a',active);
-        reload();
-      });
-    }
+      Lampa.Input.edit(
+        { title:'Плейлист URL', free:true, value:'' },
+        function(u){
+          if(typeof u !== 'string') return;
+          u = u.trim();
+          if(!u) return;
 
-    function reload(){
-      Lampa.Activity.close();
-      setTimeout(()=>Lampa.Activity.push({title:'IPTV',component:'iptv'}),50);
+          playlists.push({name:'Playlist '+(playlists.length+1),url:u});
+          Lampa.Storage.set('iptv_pl',playlists);
+          active=playlists.length-1;
+          Lampa.Storage.set('iptv_pl_a',active);
+
+          Lampa.Activity.push({ title:'IPTV', component:'iptv', reload:true });
+        }
+      );
     }
 
     function loadPL(){
@@ -181,7 +180,9 @@
         else r.find('img').attr('src','https://bylampa.github.io/img/iptv.png');
 
         r.on('hover:focus',()=>updateEPG(ch));
-        r.on('hover:enter',()=>Lampa.Player.play({url:ch.u,title:ch.n,type:'tv',epg:EPG_URL,epg_id:ch.id}));
+        r.on('hover:enter',()=>Lampa.Player.play({
+          url:ch.u,title:ch.n,type:'tv',epg:EPG_URL,epg_id:ch.id
+        }));
         colC.append(r);
       });
       focus(colC);
