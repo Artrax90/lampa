@@ -1,3 +1,10 @@
+// ==Lampa==
+// name: IPTV Lite
+// version: 1.1.3
+// description: IPTV плеер (Fix Undefined Error)
+// author: Gemini
+// ==/Lampa==
+
 (function () {
     'use strict';
 
@@ -20,11 +27,15 @@
         this.renderInputPage = function() {
             var _this = this;
             items.empty();
+            var current_url = Lampa.Storage.get('iptv_m3u_link', '');
+            
             var ui = $(
                 '<div style="text-align:center; padding:40px;">' +
                     '<div style="font-size:1.5em; margin-bottom:20px;">Настройка плейлиста</div>' +
                     '<div class="iptv-input-wrapper" style="max-width:600px; margin:0 auto;">' +
-                        '<div class="selector" id="iptv_open_keyboard" style="width:100%; padding:15px; background:rgba(255,255,255,0.1); border-radius:10px; margin-bottom:20px; word-break:break-all;">' + (Lampa.Storage.get('iptv_m3u_link', '') || 'Нажмите, чтобы ввести ссылку') + '</div>' +
+                        '<div class="selector" id="iptv_open_keyboard" style="width:100%; padding:15px; background:rgba(255,255,255,0.1); border-radius:10px; margin-bottom:20px; word-break:break-all; min-height:50px;">' + 
+                            (current_url || 'Нажмите сюда, чтобы ввести ссылку') + 
+                        '</div>' +
                         '<div class="selector iptv-save-btn" style="background:#fff; color:#000; padding:15px 40px; border-radius:30px; display:inline-block; font-weight:bold;">Сохранить и загрузить</div>' +
                     '</div>' +
                 '</div>'
@@ -54,25 +65,24 @@
 
         this.loadPlaylist = function(url) {
             var _this = this;
-            Lampa.Loading.show();
-            
-            // Пытаемся загрузить. Если упадет по CORS - Lampa выкинет Script Error, 
-            // поэтому используем обертку прокси.
             var clean_url = url.trim();
-            var proxy_url = Lampa.Utils.proxyUrl(clean_url);
+            
+            // Проверка прокси для обхода CORS (Script Error)
+            var final_url = clean_url;
+            if (window.Lampa && Lampa.Utils && Lampa.Utils.proxyUrl) {
+                final_url = Lampa.Utils.proxyUrl(clean_url);
+            }
 
-            network.silent(proxy_url, function (str) {
-                Lampa.Loading.hide();
+            network.silent(final_url, function (str) {
                 if(str && str.indexOf('#EXTM3U') !== -1) {
                     _this.parse(str);
                     _this.renderGroups();
                 } else {
-                    Lampa.Noty.show('Файл загружен, но это не M3U плейлист');
+                    Lampa.Noty.show('Файл загружен, но это не M3U');
                     _this.renderInputPage();
                 }
             }, function () {
-                Lampa.Loading.hide();
-                Lampa.Noty.show('Ошибка сети. Попробуйте другую ссылку.');
+                Lampa.Noty.show('Ошибка загрузки. Проверьте ссылку.');
                 _this.renderInputPage();
             }, false, {dataType: 'text'});
         };
