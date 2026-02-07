@@ -1,10 +1,3 @@
-// ==Lampa==
-// name: IPTV Lite
-// version: 1.1.3
-// description: IPTV плеер (Fix Undefined Error)
-// author: Gemini
-// ==/Lampa==
-
 (function () {
     'use strict';
 
@@ -19,25 +12,52 @@
             var url = Lampa.Storage.get('iptv_m3u_link', '');
 
             if (!url) {
-                items.append('<div style="text-align:center;padding:40px;font-size:1.5em">Укажите ссылку на M3U в настройках</div>');
+                // Вместо простого текста — вызываем окно ввода сразу
+                this.askForLink();
             } else {
-                Lampa.Loading.show();
-                network.silent(url, function (str) {
-                    _this.parse(str);
-                    _this.renderGroups();
-                    Lampa.Loading.hide();
-                }, function () {
-                    Lampa.Loading.hide();
-                    Lampa.Noty.show('Ошибка загрузки M3U');
-                }, false, {dataType: 'text'});
+                this.loadPlaylist(url);
             }
-
             scroll.append(items);
         };
 
-        this.render = function () {
-            return scroll.render();
+        this.askForLink = function() {
+            var _this = this;
+            items.empty();
+            
+            var placeholder = $('<div style="text-align:center;padding:40px;"><div style="font-size:1.5em;margin-bottom:20px">Нужна ссылка на M3U</div><div class="selector" style="background:#fff;color:#000;padding:15px 30px;border-radius:30px;display:inline-block;font-weight:bold">Ввести ссылку</div></div>');
+            
+            placeholder.on('hover:enter', function() {
+                Lampa.Input.edit({
+                    value: '',
+                    title: 'Введите ссылку на M3U',
+                    free: true
+                }, function(new_url) {
+                    if(new_url) {
+                        Lampa.Storage.set('iptv_m3u_link', new_url);
+                        _this.loadPlaylist(new_url);
+                    }
+                });
+            });
+            
+            items.append(placeholder);
+            Lampa.Controller.enable('content');
         };
+
+        this.loadPlaylist = function(url) {
+            var _this = this;
+            Lampa.Loading.show();
+            network.silent(url, function (str) {
+                Lampa.Loading.hide();
+                _this.parse(str);
+                _this.renderGroups();
+            }, function () {
+                Lampa.Loading.hide();
+                Lampa.Noty.show('Ошибка загрузки. Проверьте ссылку.');
+                _this.askForLink(); // Если ошибка — даем шанс ввести заново
+            }, false, {dataType: 'text'});
+        };
+
+        this.render = function () { return scroll.render(); };
 
         this.parse = function (str) {
             groups = {'Все каналы': []};
@@ -64,7 +84,14 @@
         this.renderGroups = function () {
             var _this = this;
             items.empty();
+            
+            // Кнопка смены ссылки (чтобы всегда можно было поменять)
+            var reset = Lampa.Template.get('button_category', {title: '⚙️ Сменить плейлист'});
+            reset.on('hover:enter', function() { _this.askForLink(); });
+            items.append(reset);
+
             Object.keys(groups).forEach(function (gName) {
+                if (gName === 'Все каналы' && Object.keys(groups).length > 2) return;
                 var card = Lampa.Template.get('button_category', {title: gName + ' (' + groups[gName].length + ')'});
                 card.on('hover:enter', function () { _this.renderChannels(gName); });
                 items.append(card);
@@ -93,58 +120,18 @@
         this.pause = function () {};
         this.stop = function () {};
         this.start = function () {};
-        this.destroy = function () {
-            network.clear();
-            scroll.destroy();
-            items.remove();
-        };
+        this.destroy = function () { network.clear(); scroll.destroy(); items.remove(); };
     }
 
-    function plugin_init() {
+    function init() {
         Lampa.Component.add('iptv_lite', IPTVComponent);
-
-        // Кнопка в меню (пробуем через стандартный метод, если упадет - вернем ручной)
-        var menu_item = {
-            id: 'iptv_lite',
-            title: 'IPTV Lite',
-            icon: '<svg height="36" viewBox="0 0 24 24" width="36" xmlns="http://www.w3.org/2000/svg"><path d="M10 16.5l6-4.5-6-4.5v9zM12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" fill="white"/></svg>',
-            section: 'main',
-            onSelect: function () {
-                Lampa.Activity.push({ title: 'IPTV Lite', component: 'iptv_lite', page: 1 });
-            }
-        };
-        
-        if (Lampa.Menu && Lampa.Menu.add) Lampa.Menu.add(menu_item);
-        else {
-            // Если Lampa.Menu.add нет, добавляем вручную
-            var html = $('<li class="menu__item selector" data-action="iptv_lite"><div class="menu__ico">' + menu_item.icon + '</div><div class="menu__text">' + menu_item.title + '</div></li>');
-            html.on('hover:enter', menu_item.onSelect);
-            $('.menu .menu__list').append(html);
-        }
-
-        // Настройки
-        Lampa.Settings.listener.follow('open', function (e) {
-            if (e.name === 'main') {
-                var field = $('<div class="settings-folder selector"><div class="settings-folder__name">IPTV Lite</div></div>');
-                field.on('hover:enter', function () {
-                    Lampa.Settings.create('iptv_lite_set', 'IPTV Lite');
-                    var param = Lampa.Template.get('settings_param_input', {
-                        name: 'iptv_m3u_link',
-                        title: 'M3U Link',
-                        placeholder: 'http://...',
-                        value: Lampa.Storage.get('iptv_m3u_link', '')
-                    });
-                    param.on('change', function (v) { Lampa.Storage.set('iptv_m3u_link', v); });
-                    Lampa.Settings.add(param);
-                    Lampa.Controller.enable('settings_iptv_lite_set');
-                });
-                e.body.find('.settings-main').append(field);
-            }
+        var item = $('<li class="menu__item selector" data-action="iptv_lite"><div class="menu__ico"><svg height="22" viewBox="0 0 24 24" width="22" xmlns="http://www.w3.org/2000/svg"><path d="M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14zM8 15c0-1.66 1.34-3 3-3 .35 0 .69.07 1 .18V6h5v2h-3v7.03A3.003 3.003 0 0 1 8 15z" fill="currentColor"/></svg></div><div class="menu__text">IPTV Lite</div></li>');
+        item.on('hover:enter', function () {
+            Lampa.Activity.push({ title: 'IPTV Lite', component: 'iptv_lite', page: 1 });
         });
+        $('.menu .menu__list').append(item);
     }
 
-    if (window.Lampa) {
-        if (window.app_ready) plugin_init();
-        else Lampa.Listener.follow('app', function (e) { if (e.type === 'ready') plugin_init(); });
-    }
+    if (window.app_ready) init();
+    else Lampa.Listener.follow('app', function (e) { if (e.type == 'ready') init(); });
 })();
