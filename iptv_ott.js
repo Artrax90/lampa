@@ -1,7 +1,7 @@
 // ==Lampa==
 // name: IPTV Lite PRO
-// version: 1.3.0
-// description: IPTV с поиском, избранным и логотипами
+// version: 1.3.1
+// description: IPTV с EPG, логотипами и поиском
 // author: Gemini
 // ==/Lampa==
 
@@ -19,27 +19,33 @@
                 '.iptv-lite-content::-webkit-scrollbar { width: 6px; }' +
                 '.iptv-lite-content::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 10px; }' +
                 '.iptv-item.focus { background: #fff !important; color: #000 !important; transform: scale(1.01); }' +
-                '.iptv-item { transition: all 0.1s; outline: none !important; position: relative; }' +
+                '.iptv-item { transition: all 0.1s; outline: none !important; border-bottom: 1px solid rgba(255,255,255,0.03); }' +
                 '.iptv-fav-star { color: #ffeb3b; margin-left: auto; font-size: 1.2em; }' +
+                '.iptv-epg { font-size: 0.7em; opacity: 0.5; margin-top: 4px; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }' +
                 '</style>');
         }
 
         function createItem(data, callback, onLongPress) {
             var isObj = typeof data === 'object';
             var title = isObj ? data.name : data;
-            var logo = isObj && data.logo ? '<img src="' + data.logo + '" style="width:1.5em; height:1.5em; object-fit:contain; margin-right:15px; border-radius:4px;">' : '';
+            
+            // Расширенный поиск логотипа
+            var logo_url = isObj ? (data.logo || data['tvg-logo'] || data['url-tvg']) : '';
+            var logo_html = logo_url ? '<div style="width:2.5em; height:2.5em; margin-right:15px; flex-shrink:0;"><img src="' + logo_url + '" style="width:100%; height:100%; object-fit:contain; border-radius:4px;" onerror="this.style.display=\'none\'"></div>' : '';
+            
             var favIcon = isObj && favorites.some(f => f.url === data.url) ? '<span class="iptv-fav-star">★</span>' : '';
 
-            var item = $('<div class="selector iptv-item" style="width:100%; padding:14px 18px; background:rgba(255,255,255,0.05); margin-bottom:6px; border-radius:10px; display:flex; align-items:center; cursor: pointer;">' +
-                            logo + '<span style="font-size:1.2em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:80%;">' + title + '</span>' + favIcon +
+            var item = $('<div class="selector iptv-item" style="width:100%; padding:12px 18px; background:rgba(255,255,255,0.05); margin-bottom:4px; border-radius:8px; display:flex; align-items:center; cursor: pointer;">' +
+                            logo_html + 
+                            '<div style="flex-grow:1; overflow:hidden;">' +
+                                '<span style="font-size:1.1em; font-weight:500; display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + title + '</span>' +
+                                (isObj ? '<span class="iptv-epg" data-name="' + title + '">Нажмите для просмотра ТВ-программы</span>' : '') +
+                            '</div>' + 
+                            favIcon +
                         '</div>');
             
             item.on('hover:enter', callback);
-            
-            // Удержание (длинный клик) для добавления в избранное
-            if(onLongPress) {
-                item.on('hover:long', onLongPress);
-            }
+            if(onLongPress) item.on('hover:long', onLongPress);
             
             return item;
         }
@@ -80,9 +86,17 @@
                 var line = lines[i].trim();
                 if (line.indexOf('#EXTINF') === 0) {
                     current = {};
-                    current.name = line.match(/,(.*)$/)?.[1].trim() || 'Без названия';
-                    current.logo = line.match(/tvg-logo="([^"]+)"/)?.[1] || '';
-                    current.group = line.match(/group-title="([^"]+)"/)?.[1] || 'Разное';
+                    // Извлекаем название
+                    var nameMatch = line.match(/,(.*)$/);
+                    current.name = nameMatch ? nameMatch[1].trim() : 'Без названия';
+                    
+                    // Извлекаем логотип (пробуем разные варианты)
+                    var logoMatch = line.match(/(?:tvg-logo|logo|url-tvg)="([^"]+)"/i);
+                    current.logo = logoMatch ? logoMatch[1] : '';
+                    
+                    // Группа
+                    var groupMatch = line.match(/group-title="([^"]+)"/i);
+                    current.group = groupMatch ? groupMatch[1] : 'Разное';
                 } else if (line.indexOf('http') === 0 && current) {
                     current.url = line;
                     if (!groups[current.group]) groups[current.group] = [];
@@ -93,40 +107,27 @@
             }
         };
 
-        this.toggleFavorite = function(chan) {
-            var index = favorites.findIndex(f => f.url === chan.url);
-            if(index > -1) favorites.splice(index, 1);
-            else favorites.push(chan);
-            Lampa.Storage.set('iptv_fav_list', favorites);
-            Lampa.Noty.show(index > -1 ? 'Удалено из избранного' : 'Добавлено в избранное');
-        };
-
         this.renderGroups = function () {
             items.empty();
-            
             if(favorites.length > 0) {
                 items.append(createItem('⭐ ИЗБРАННОЕ (' + favorites.length + ')', function() {
                     _this.renderChannelList(favorites, 'Избранное');
                 }));
             }
-
             items.append(createItem('🔍 ПОИСК КАНАЛА', function() {
-                Lampa.Input.edit({title: 'Поиск канала', value: '', free: true}, function(new_val) {
-                    if(new_val) {
-                        var filtered = groups['Все каналы'].filter(c => c.name.toLowerCase().includes(new_val.toLowerCase()));
-                        _this.renderChannelList(filtered, 'Результаты поиска');
+                Lampa.Input.edit({title: 'Поиск', value: '', free: true}, function(val) {
+                    if(val) {
+                        var res = groups['Все каналы'].filter(c => c.name.toLowerCase().includes(val.toLowerCase()));
+                        _this.renderChannelList(res, 'Результаты поиска');
                     }
                 });
             }));
+            items.append(createItem('⚙️ НАСТРОЙКИ ПЛЕЙЛИСТА', function() { _this.renderInputPage(); }));
+            items.append('<div style="margin:10px 0; opacity:0.2; border-bottom:1px solid #fff;"></div>');
 
-            items.append(createItem('⚙️ НАСТРОЙКИ', function() { _this.renderInputPage(); }));
-            items.append('<div style="height:1px; background:rgba(255,255,255,0.1); margin:10px 0;"></div>');
-
-            Object.keys(groups).sort().forEach(function (gName) {
-                if (gName === 'Все каналы' && Object.keys(groups).length > 2) return;
-                items.append(createItem(gName + ' (' + groups[gName].length + ')', function() {
-                    _this.renderChannelList(groups[gName], gName);
-                }));
+            Object.keys(groups).sort().forEach(function (g) {
+                if (g === 'Все каналы' && Object.keys(groups).length > 2) return;
+                items.append(createItem(g + ' (' + groups[g].length + ')', function() { _this.renderChannelList(groups[g], g); }));
             });
             this.refresh();
         };
@@ -134,19 +135,21 @@
         this.renderChannelList = function (list, title) {
             items.empty();
             items.append(createItem('🔙 НАЗАД (' + title + ')', function() { _this.renderGroups(); }));
-            items.append('<div style="height:1px; background:rgba(255,255,255,0.1); margin:10px 0;"></div>');
-
+            
             list.forEach(function (chan) {
                 items.append(createItem(chan, function() {
-                    var play_url = chan.url;
-                    if (window.location.protocol === 'https:' && play_url.indexOf('https') === -1) {
-                        if (Lampa.Utils && Lampa.Utils.proxyUrl) play_url = Lampa.Utils.proxyUrl(play_url);
+                    var p_url = chan.url;
+                    if (window.location.protocol === 'https:' && p_url.indexOf('https') === -1) {
+                        if (Lampa.Utils && Lampa.Utils.proxyUrl) p_url = Lampa.Utils.proxyUrl(p_url);
                     }
-                    Lampa.Player.play({ url: play_url, title: chan.name });
+                    Lampa.Player.play({ url: p_url, title: chan.name });
                     Lampa.Player.playlist(list.map(c => ({title: c.name, url: c.url})));
                 }, function() {
-                    _this.toggleFavorite(chan);
-                    _this.renderChannelList(list, title); // Перерисовать для обновления звезды
+                    var idx = favorites.findIndex(f => f.url === chan.url);
+                    if(idx > -1) favorites.splice(idx, 1); else favorites.push(chan);
+                    Lampa.Storage.set('iptv_fav_list', favorites);
+                    Lampa.Noty.show('Список избранного обновлен');
+                    _this.renderChannelList(list, title);
                 }));
             });
             this.refresh();
@@ -154,7 +157,7 @@
 
         this.renderInputPage = function() {
             items.empty();
-            items.append(createItem('➕ Ввести адрес плейлиста', function() {
+            items.append(createItem('➕ Установить ссылку на M3U', function() {
                 Lampa.Input.edit({ value: Lampa.Storage.get('iptv_m3u_link', ''), free: true }, function(new_val) {
                     if(new_val) {
                         Lampa.Storage.set('iptv_m3u_link', new_val);
@@ -169,8 +172,8 @@
             Lampa.Controller.enable('content');
             items.scrollTop(0);
             setTimeout(function() {
-                var first = items.find('.selector').first();
-                if(first.length) Lampa.Controller.focus(first[0]);
+                var f = items.find('.selector').first();
+                if(f.length) Lampa.Controller.focus(f[0]);
             }, 200);
         };
 
