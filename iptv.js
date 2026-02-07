@@ -1,7 +1,7 @@
 // ==Lampa==
-// name: IPTV TiviMate Pro
-// version: 1.8.1
-// description: Три колонки: Каналы | Инфо | Программа. Исправлен пустой экран.
+// name: IPTV TiviMate Trinity
+// version: 1.9.0
+// description: Три колонки: Список | Инфо | Программа. Улучшенный поиск EPG.
 // author: Gemini
 // ==/Lampa==
 
@@ -10,63 +10,54 @@
 
     function IPTVComponent(object) {
         var _this = this;
-        // Создаем контейнер сразу, чтобы Lampa было что рендерить
-        var items = $('<div class="tivi-dash-wrapper"><div class="tivi-loading">Загрузка интерфейса...</div></div>');
+        var items = $('<div class="trinity-layout"></div>');
+        var col_left, col_center, col_right;
         var groups = {};
         
-        // Стили
-        if (!$('#tivi-dash-style').length) {
-            $('head').append('<style id="tivi-dash-style">' +
-                '.tivi-dash-wrapper { display: flex; width: 100%; height: 100%; background: #0c0e12; color: #fff; font-family: sans-serif; }' +
-                '.tivi-col { height: 100%; overflow-y: auto; display: flex; flex-direction: column; box-sizing: border-box; }' +
-                '.tivi-col-1 { width: 25%; border-right: 1px solid rgba(255,255,255,0.05); padding: 15px; }' +
-                '.tivi-col-2 { width: 45%; border-right: 1px solid rgba(255,255,255,0.05); padding: 30px; align-items: center; justify-content: center; text-align: center; background: radial-gradient(circle at center, rgba(52, 152, 219, 0.07) 0%, transparent 100%); }' +
-                '.tivi-col-3 { width: 30%; padding: 15px; background: rgba(0,0,0,0.1); }' +
-                '.tivi-loading { width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-size:1.5em; opacity:0.5; }' +
-                '.tivi-btn { padding: 12px 15px; background: rgba(255,255,255,0.03); margin-bottom: 5px; border-radius: 6px; cursor: pointer; border-left: 4px solid transparent; transition: 0.2s; }' +
-                '.tivi-btn.focus { background: #3498db !important; border-left-color: #fff; transform: translateX(5px); }' +
-                '.tivi-btn-text { font-size: 1.1em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }' +
-                '.tivi-big-logo { width: 220px; height: 130px; background: #000; border-radius: 12px; margin-bottom: 25px; display: flex; align-items: center; justify-content: center; overflow: hidden; box-shadow: 0 15px 35px rgba(0,0,0,0.6); }' +
-                '.tivi-big-logo img { max-width: 85%; max-height: 85%; object-fit: contain; }' +
-                '.tivi-main-title { font-size: 2.4em; font-weight: bold; margin-bottom: 15px; line-height: 1.1; }' +
-                '.tivi-main-desc { font-size: 1.3em; color: rgba(255,255,255,0.5); line-height: 1.5; margin-bottom: 30px; }' +
-                '.tivi-epg-row { padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.05); }' +
-                '.tivi-epg-time { color: #3498db; font-weight: bold; font-size: 0.9em; margin-bottom: 3px; }' +
-                '.tivi-epg-name { color: rgba(255,255,255,0.9); font-size: 1em; }' +
-                '.tivi-label { font-size: 0.75em; color: rgba(255,255,255,0.3); text-transform: uppercase; margin: 20px 0 10px; letter-spacing: 2px; }' +
+        // CSS - Максимально надежный и современный
+        if (!$('#trinity-style').length) {
+            $('head').append('<style id="trinity-style">' +
+                '.trinity-layout { display: flex; width: 100%; height: 100%; background: #080a0d; position: absolute; top:0; left:0; overflow: hidden; }' +
+                '.trinity-col { height: 100%; display: flex; flex-direction: column; box-sizing: border-box; border-right: 1px solid rgba(255,255,255,0.05); }' +
+                '.trinity-left { width: 25%; padding: 15px; overflow-y: auto; }' +
+                '.trinity-center { width: 40%; padding: 40px; align-items: center; justify-content: center; text-align: center; background: radial-gradient(circle at center, rgba(52, 152, 219, 0.05), transparent); }' +
+                '.trinity-right { width: 35%; padding: 15px; overflow-y: auto; background: rgba(0,0,0,0.2); }' +
+                '.trinity-item { padding: 10px 15px; background: rgba(255,255,255,0.02); margin-bottom: 5px; border-radius: 6px; cursor: pointer; border-left: 3px solid transparent; }' +
+                '.trinity-item.focus { background: #3498db !important; border-left-color: #fff; }' +
+                '.trinity-item-name { font-size: 1.1em; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }' +
+                '.trinity-big-logo { width: 240px; height: 140px; background: #000; border-radius: 12px; margin-bottom: 30px; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 40px rgba(0,0,0,0.8); }' +
+                '.trinity-big-logo img { max-width: 80%; max-height: 80%; object-fit: contain; }' +
+                '.trinity-title { font-size: 2.2em; font-weight: bold; color: #fff; margin-bottom: 15px; line-height: 1.2; }' +
+                '.trinity-desc { font-size: 1.2em; color: rgba(255,255,255,0.5); line-height: 1.5; margin-bottom: 30px; max-height: 200px; overflow: hidden; }' +
+                '.trinity-epg-row { padding: 12px; border-bottom: 1px solid rgba(255,255,255,0.05); transition: 0.2s; }' +
+                '.trinity-epg-row.active { background: rgba(52, 152, 219, 0.1); border-left: 2px solid #3498db; }' +
+                '.trinity-epg-time { color: #3498db; font-weight: bold; margin-bottom: 3px; font-size: 0.9em; }' +
+                '.trinity-label { font-size: 0.7em; color: rgba(255,255,255,0.3); text-transform: uppercase; margin: 20px 0 10px; letter-spacing: 2px; }' +
+                '.trinity-btn-play { background: #fff; color: #000; padding: 12px 30px; border-radius: 40px; font-weight: bold; font-size: 1.2em; margin-top: 10px; cursor: pointer; }' +
                 '</style>');
         }
 
-        // Безопасный прокси
-        function getSafeUrl(url) {
-            if (!url) return '';
-            if (url.indexOf('http') !== 0) return url;
-            try {
-                return (Lampa.Utils && Lampa.Utils.proxyUrl) ? Lampa.Utils.proxyUrl(url) : url;
-            } catch(e) { return url; }
-        }
-
         this.create = function () {
-            if (Lampa.TV) Lampa.TV.addSource('iptvx_fixed', 'https://iptvx.one/epg/epg.xml.gz');
-            
+            // Строим каркас сразу
+            items.html('<div class="trinity-col trinity-left"></div><div class="trinity-col trinity-center"></div><div class="trinity-col trinity-right"></div>');
+            col_left = items.find('.trinity-left');
+            col_center = items.find('.trinity-center');
+            col_right = items.find('.trinity-right');
+
+            if (Lampa.TV) Lampa.TV.addSource('iptvx', 'https://iptvx.one/epg/epg.xml.gz');
+
             var url = Lampa.Storage.get('iptv_m3u_link', '');
-            if (!url) this.renderSettings();
-            else this.load(url);
+            if (!url) this.renderSettings(); else this.load(url);
         };
 
         this.load = function (url) {
+            col_left.html('<div style="color:#fff; opacity:0.3;">Загрузка...</div>');
+            var proxy = (Lampa.Utils && Lampa.Utils.proxyUrl) ? Lampa.Utils.proxyUrl(url) : url;
             $.ajax({
-                url: getSafeUrl(url),
+                url: proxy,
                 method: 'GET',
-                success: function (str) { 
-                    _this.parse(str); 
-                    _this.buildInterface(); 
-                    _this.renderGroups(); 
-                },
-                error: function () { 
-                    Lampa.Noty.show('Ошибка загрузки плейлиста'); 
-                    _this.renderSettings(); 
-                }
+                success: function (str) { _this.parse(str); _this.renderGroups(); },
+                error: function () { Lampa.Noty.show('Ошибка плейлиста'); _this.renderSettings(); }
             });
         };
 
@@ -78,7 +69,7 @@
                 if (l.indexOf('#EXTINF') === 0) {
                     var tid = l.match(/tvg-id="([^"]+)"/i)?.[1] || '';
                     cur = {
-                        name: l.match(/,(.*)$/)?.[1].trim() || 'No name',
+                        name: l.match(/,(.*)$/)?.[1].trim() || 'Без названия',
                         id: tid,
                         logo: l.match(/tvg-logo="([^"]+)"/i)?.[1] || (tid ? 'https://iptvx.one/logo/' + tid + '.png' : ''),
                         group: l.match(/group-title="([^"]+)"/i)?.[1] || 'Общие'
@@ -93,95 +84,79 @@
             });
         };
 
-        this.buildInterface = function() {
-            items.empty();
-            var c1 = $('<div class="tivi-col tivi-col-1"></div>');
-            var c2 = $('<div class="tivi-col tivi-col-2"></div>');
-            var c3 = $('<div class="tivi-col tivi-col-3"></div>');
-            items.append(c1).append(c2).append(c3);
-        };
-
-        this.updateDetails = function (chan) {
-            var c2 = items.find('.tivi-col-2').empty();
-            var c3 = items.find('.tivi-col-3').empty();
+        this.updateEPG = function (chan) {
+            col_center.empty();
+            col_right.empty();
             
-            var now = { title: "Программа не загружена", desc: "Подождите завершения индексации EPG (1-2 мин)." };
-            var list = [];
+            var epg_data = { current: { title: "Нет программы", description: "Подождите минуту или проверьте название канала." }, list: [] };
 
             if (Lampa.TV) {
-                var epg = Lampa.TV.getEPG(chan.id || chan.name);
-                if (epg) {
-                    if (epg.current) {
-                        now.title = epg.current.title;
-                        now.desc = epg.current.description || "Описание этой программы отсутствует.";
-                    }
-                    if (epg.list) list = epg.list.slice(0, 12);
-                }
+                // Пытаемся найти по ID, если нет - по чистому имени
+                var data = Lampa.TV.getEPG(chan.id) || Lampa.TV.getEPG(chan.name);
+                if (data) epg_data = data;
             }
 
-            // Центр
-            c2.append(`
-                <div class="tivi-big-logo"><img src="${chan.logo}" onerror="this.src=''"></div>
-                <div class="tivi-main-title">${now.title}</div>
-                <div class="tivi-main-desc">${now.desc}</div>
-                <div style="font-size:1.1em; color:#3498db; background:rgba(52,152,219,0.1); padding:10px 20px; border-radius:30px;">
-                    Нажмите <b>OK</b> чтобы смотреть <b>${chan.name}</b>
-                </div>
+            // Рендер центра
+            col_center.append(`
+                <div class="trinity-big-logo"><img src="${chan.logo}" onerror="this.src=''"></div>
+                <div class="trinity-title">${epg_data.current.title}</div>
+                <div class="trinity-desc">${epg_data.current.description || ''}</div>
+                <div class="trinity-btn-play">СМОТРЕТЬ ЭФИР</div>
             `);
 
-            // Право
-            c3.append('<div class="tivi-label">В эфире сегодня</div>');
-            if (list.length) {
-                list.forEach(function (e) {
-                    c3.append(`
-                        <div class="tivi-epg-row">
-                            <div class="tivi-epg-time">${e.time}</div>
-                            <div class="tivi-epg-name">${e.title}</div>
+            // Рендер правой колонки
+            col_right.append('<div class="trinity-label">Программа на сегодня</div>');
+            if (epg_data.list && epg_data.list.length) {
+                epg_data.list.forEach(function (e) {
+                    var is_now = e.title === epg_data.current.title;
+                    col_right.append(`
+                        <div class="trinity-epg-row ${is_now ? 'active' : ''}">
+                            <div class="trinity-epg-time">${e.time}</div>
+                            <div class="trinity-epg-name">${e.title}</div>
                         </div>
                     `);
                 });
             } else {
-                c3.append('<div style="padding:20px; opacity:0.3; text-align:center;">Данные EPG отсутствуют</div>');
+                col_right.append('<div style="padding:20px; opacity:0.3;">Программа передач не найдена</div>');
             }
         };
 
         this.renderGroups = function () {
-            var c1 = items.find('.tivi-col-1').empty();
-            c1.append('<div class="tivi-label">Меню</div>');
-            this.addBtn(c1, '⚙️ НАСТРОЙКИ', function () { _this.renderSettings(); });
-            c1.append('<div class="tivi-label">Категории</div>');
+            col_left.empty().append('<div class="trinity-label">Меню</div>');
+            this.addBtn(col_left, '⚙️ НАСТРОЙКИ', function () { _this.renderSettings(); });
+            col_left.append('<div class="trinity-label">Категории</div>');
             Object.keys(groups).sort().forEach(function (g) {
                 if (g === 'Все каналы' && Object.keys(groups).length > 2) return;
-                _this.addBtn(c1, g.toUpperCase(), function () { _this.renderList(groups[g], g); });
+                _this.addBtn(col_left, g.toUpperCase(), function () { _this.renderList(groups[g], g); });
             });
             this.focus();
         };
 
         this.renderList = function (list, title) {
-            var c1 = items.find('.tivi-col-1').empty();
-            this.addBtn(c1, '🔙 НАЗАД', function () { _this.renderGroups(); });
-            c1.append('<div class="tivi-label">' + title + '</div>');
+            col_left.empty();
+            this.addBtn(col_left, '🔙 НАЗАД', function () { _this.renderGroups(); });
+            col_left.append('<div class="trinity-label">' + title + '</div>');
             list.forEach(function (chan) {
-                var row = $('<div class="selector tivi-btn"><div class="tivi-btn-text">' + chan.name + '</div></div>');
-                row.on('hover:focus', function () { _this.updateDetails(chan); });
+                var row = $('<div class="selector trinity-item"><div class="trinity-item-name">' + chan.name + '</div></div>');
+                row.on('hover:focus', function () { _this.updateEPG(chan); });
                 row.on('hover:enter', function () { 
-                    Lampa.Player.play({ url: getSafeUrl(chan.url), title: chan.name }); 
+                    var play_url = (Lampa.Utils && Lampa.Utils.proxyUrl) ? Lampa.Utils.proxyUrl(chan.url) : chan.url;
+                    Lampa.Player.play({ url: play_url, title: chan.name }); 
                 });
-                c1.append(row);
+                col_left.append(row);
             });
             this.focus();
         };
 
         this.addBtn = function (cont, txt, action) {
-            var row = $('<div class="selector tivi-btn"><div class="tivi-btn-text">' + txt + '</div></div>');
+            var row = $('<div class="selector trinity-item"><div class="trinity-item-name">' + txt + '</div></div>');
             row.on('hover:enter', action);
             cont.append(row);
         };
 
         this.renderSettings = function () {
-            var c1 = items.find('.tivi-col-1').empty();
-            c1.append('<div class="tivi-label">Конфигурация</div>');
-            this.addBtn(c1, '➕ ВВЕСТИ URL ПЛЕЙЛИСТА', function () {
+            col_left.empty().append('<div class="trinity-label">Плейлист</div>');
+            this.addBtn(col_left, '➕ ВВЕСТИ URL', function () {
                 Lampa.Input.edit({ value: Lampa.Storage.get('iptv_m3u_link', ''), free: true }, function (v) {
                     if (v) { Lampa.Storage.set('iptv_m3u_link', v); _this.load(v); }
                 });
@@ -192,7 +167,7 @@
         this.focus = function () {
             Lampa.Controller.enable('content');
             setTimeout(function () {
-                var f = items.find('.selector').first();
+                var f = col_left.find('.selector').first();
                 if (f.length) Lampa.Controller.focus(f[0]);
             }, 200);
         };
