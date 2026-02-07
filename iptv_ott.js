@@ -1,7 +1,7 @@
 // ==Lampa==
 // name: IPTV Lite
-// version: 1.2.2
-// description: IPTV плеер (Scroll & Focus Engine Fix)
+// version: 1.2.3
+// description: IPTV плеер (Final Scroll & Playback Fix)
 // author: Gemini
 // ==/Lampa==
 
@@ -9,17 +9,18 @@
     'use strict';
 
     function IPTVComponent(object) {
+        var _this = this;
         var scroll = new Lampa.Scroll({mask: true, over: true});
         var items = $('<div class="category-full"></div>');
         var groups = {};
 
-        function createButton(title, callback) {
-            var btn = $('<div class="selector scroll-item" style="width:100%; padding:18px 25px; background:rgba(255,255,255,0.05); margin-bottom:8px; border-radius:12px; display:flex; justify-content:space-between; align-items:center; cursor: pointer;">' +
-                            '<span style="font-size:1.3em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-right:10px;">' + title + '</span>' +
-                            '<span style="opacity:0.4; font-size:1.2em;">&rsaquo;</span>' +
+        // Функция создания элементов с правильной регистрацией для скролла
+        function createItem(title, callback) {
+            var item = $('<div class="selector scroll-item" style="width:100%; padding:18px 25px; background:rgba(255,255,255,0.05); margin-bottom:5px; border-radius:10px; display:flex; justify-content:space-between; align-items:center;">' +
+                            '<span style="font-size:1.3em;">' + title + '</span>' +
                         '</div>');
-            btn.on('hover:enter', callback);
-            return btn;
+            item.on('hover:enter', callback);
+            return item;
         }
 
         this.create = function () {
@@ -29,48 +30,31 @@
         };
 
         this.renderInputPage = function() {
-            var _this = this;
             items.empty();
-            var current_url = Lampa.Storage.get('iptv_m3u_link', '');
-            
-            var ui = $('<div style="text-align:center; padding:40px;">' +
-                        '<div style="font-size:1.6em; margin-bottom:30px;">Настройка IPTV</div>' +
-                        '<div class="selector" id="iptv_url_field" style="width:100%; padding:20px; background:rgba(255,255,255,0.1); border-radius:15px; margin-bottom:20px; word-break:break-all;">' + (current_url || 'Нажмите для ввода ссылки') + '</div>' +
-                        '<div class="selector iptv-save-btn" style="background:#fff; color:#000; padding:15px 40px; border-radius:30px; display:inline-block; font-weight:bold;">Загрузить</div>' +
-                      '</div>');
-
-            ui.find('#iptv_url_field').on('hover:enter', function() {
+            var btn = createItem('⚙️ Настроить ссылку плейлиста', function() {
                 Lampa.Input.edit({ value: Lampa.Storage.get('iptv_m3u_link', ''), free: true }, function(new_val) {
                     if(new_val) {
                         Lampa.Storage.set('iptv_m3u_link', new_val);
-                        _this.renderInputPage();
+                        _this.loadPlaylist(new_val);
                     }
                 });
             });
-
-            ui.find('.iptv-save-btn').on('hover:enter', function() {
-                _this.loadPlaylist(Lampa.Storage.get('iptv_m3u_link', ''));
-            });
-
-            items.append(ui);
-            this.refreshContent();
+            items.append(btn);
+            this.refresh();
         };
 
         this.loadPlaylist = function(url) {
-            var _this = this;
-            items.empty().append('<div style="text-align:center; padding:50px;">Загрузка каналов...</div>');
-
+            items.empty().append('<div style="text-align:center; padding:50px;">Загрузка данных...</div>');
             $.ajax({
                 url: url.trim(),
                 method: 'GET',
                 dataType: 'text',
-                timeout: 15000,
                 success: function(str) {
                     _this.parse(str);
                     _this.renderGroups();
                 },
                 error: function() {
-                    Lampa.Noty.show('Ошибка загрузки. Проверьте ссылку.');
+                    Lampa.Noty.show('Ошибка загрузки');
                     _this.renderInputPage();
                 }
             });
@@ -99,53 +83,64 @@
         };
 
         this.renderGroups = function () {
-            var _this = this;
             items.empty();
-            items.append(createButton('⚙️ Настройки', function() { _this.renderInputPage(); }));
-            
+            items.append(createItem('🔄 Обновить / Сменить плейлист', function() { _this.renderInputPage(); }));
+            items.append('<div style="height:20px"></div>');
+
             Object.keys(groups).sort().forEach(function (gName) {
                 if (gName === 'Все каналы' && Object.keys(groups).length > 2) return;
-                items.append(createButton(gName + ' (' + groups[gName].length + ')', function() {
+                items.append(createItem(gName + ' (' + groups[gName].length + ')', function() {
                     _this.renderChannels(gName);
                 }));
             });
-            this.refreshContent();
+            this.refresh();
         };
 
         this.renderChannels = function (gName) {
-            var _this = this;
             items.empty();
-            items.append(createButton('← Назад', function() { _this.renderGroups(); }));
+            items.append(createItem('🔙 Назад к категориям', function() { _this.renderGroups(); }));
+            items.append('<div style="height:20px"></div>');
 
             groups[gName].forEach(function (chan) {
-                items.append(createButton(chan.name, function() {
+                items.append(createItem(chan.name, function() {
                     var video = {
                         url: chan.url,
                         title: chan.name,
-                        lampa: true
+                        method: 'video', // Переключаем на системный метод
+                        headers: { 'User-Agent': 'Mozilla/5.0' } // Имитируем браузер
                     };
                     Lampa.Player.play(video);
                     Lampa.Player.playlist([video]);
                 }));
             });
-            this.refreshContent();
+            this.refresh();
         };
 
-        this.refreshContent = function() {
+        this.refresh = function() {
             scroll.clear();
             scroll.append(items);
-            
-            // Вместо мгновенного update, даем DOM-дереву "продышаться"
-            Lampa.Controller.enable('content');
-            setTimeout(function() {
-                try {
-                    scroll.update();
-                    var first = items.find('.selector').first();
-                    if(first.length) Lampa.Controller.focus(first[0]);
-                } catch(e) {
-                    console.log('Scroll update postponed');
+            // Прямая команда контроллеру занять область скролла
+            Lampa.Controller.add('content', {
+                toggle: function () {
+                    Lampa.Controller.enable('content');
+                },
+                up: function () {
+                    Lampa.Navigator.move('up');
+                },
+                down: function () {
+                    Lampa.Navigator.move('down');
+                },
+                back: function () {
+                    Lampa.Activity.backward();
                 }
-            }, 200);
+            });
+            Lampa.Controller.enable('content');
+            
+            // Важный костыль для скролла
+            setTimeout(function() {
+                scroll.update();
+                Lampa.Controller.focus(items.find('.selector').first()[0]);
+            }, 100);
         };
 
         this.render = function () { return scroll.render(); };
