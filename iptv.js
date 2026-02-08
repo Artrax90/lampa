@@ -1,63 +1,78 @@
 // ==Lampa==
-// name: IPTV Lite Stable
-// version: 1.5.0
-// description: Stable browser version (rollback)
+// name: IPTV Stable + Default Playlist
+// version: 4.1.0
 // author: Artrax90
 // ==/Lampa==
 
 (function () {
     'use strict';
 
-    var DEFAULT_PLAYLIST = 'https://raw.githubusercontent.com/loganettv/playlists/refs/heads/main/mega.m3u';
+    /* ===== DEFAULT PLAYLIST ===== */
+    var DEFAULT_PLAYLIST = {
+        name: 'LoganetTV MEGA',
+        url: 'https://raw.githubusercontent.com/loganettv/playlists/refs/heads/main/mega.m3u'
+    };
 
     function IPTVComponent() {
-        var _this = this;
         var root = $('<div class="iptv-root"></div>');
-        var list = $('<div class="iptv-list"></div>');
-        root.append(list);
+        var colG = $('<div class="iptv-col g"></div>');
+        var colC = $('<div class="iptv-col c"></div>');
+        var colE = $('<div class="iptv-col e"></div>');
+        root.append(colG, colC, colE);
+
+        /* ===== STORAGE INIT ===== */
+        var playlists = Lampa.Storage.get('iptv_pl', null);
+        var active = Lampa.Storage.get('iptv_pl_a', 0);
+        var fav = Lampa.Storage.get('iptv_fav', []);
+
+        if (!Array.isArray(playlists) || !playlists.length) {
+            playlists = [DEFAULT_PLAYLIST];
+            active = 0;
+            Lampa.Storage.set('iptv_pl', playlists);
+            Lampa.Storage.set('iptv_pl_a', active);
+        }
 
         var groups = {};
-        var current_group = null;
+        var all = [];
 
-        /* ================= STYLE ================= */
-
-        if (!$('#iptv-style-stable').length) {
+        /* ===== STYLE ===== */
+        if (!$('#iptv-style-default').length) {
             $('head').append(`
-                <style id="iptv-style-stable">
-                .iptv-root{
-                    padding:20px;
-                    background:#0e1116;
-                    min-height:100vh;
-                }
-                .iptv-item{
-                    display:flex;
-                    align-items:center;
-                    padding:14px 16px;
-                    margin-bottom:8px;
-                    background:#1a1d23;
-                    border-radius:10px;
-                    cursor:pointer;
-                }
-                .iptv-item.focus{
-                    background:#2f6bff;
-                }
-                .iptv-item .name{
-                    color:#fff;
-                    font-size:1.15em;
-                }
-                .iptv-btn{
-                    background:#232733;
-                    font-weight:600;
-                }
-                </style>
+            <style id="iptv-style-default">
+            .iptv-root{display:flex;height:100vh;background:#0b0d10;color:#fff}
+            .iptv-col{overflow:auto}
+            .g{width:260px;padding:14px;background:#0e1116}
+            .c{flex:1;padding:18px}
+            .e{width:420px;padding:18px;background:#0e1116}
+
+            .item{padding:14px;border-radius:12px;margin-bottom:8px;background:#15181d}
+            .item.focus{background:#2962ff}
+
+            .chan{display:flex;align-items:center}
+            .logo{width:64px;height:36px;background:#000;border-radius:8px;margin-right:14px;
+                  display:flex;align-items:center;justify-content:center}
+            .logo img{max-width:100%;max-height:100%;object-fit:contain}
+
+            .name{font-size:1.05em}
+            .sub{font-size:.85em;color:#9aa0a6;margin-top:4px}
+
+            .et{font-size:1.2em;margin-bottom:10px}
+            .er{margin-bottom:8px;color:#cfcfcf}
+            </style>
             `);
         }
 
-        /* ================= CORE ================= */
+        function focus(box){
+            Lampa.Controller.enable('content');
+            var f = box.find('.selector').first();
+            if (f.length) Lampa.Controller.focus(f[0]);
+        }
+
+        /* ===== CORE ===== */
 
         this.create = function () {
-            var url = Lampa.Storage.get('iptv_playlist_url', DEFAULT_PLAYLIST);
-            load(url);
+            renderGroups();
+            loadPlaylist();
         };
 
         this.render = function () {
@@ -65,153 +80,163 @@
         };
 
         this.start = function () {
-            focus();
+            focus(colG);
         };
 
-        this.destroy = function () {
-            root.remove();
-        };
+        function addPlaylist() {
+            Lampa.Input.edit(
+                { title: 'Добавить плейлист (URL)', value: '', free: true },
+                function (u) {
+                    if (typeof u !== 'string') return;
+                    u = u.trim();
+                    if (!u) return;
 
-        /* ================= LOAD & PARSE ================= */
+                    playlists.push({
+                        name: 'Плейлист ' + (playlists.length + 1),
+                        url: u
+                    });
 
-        function load(url) {
+                    Lampa.Storage.set('iptv_pl', playlists);
+                    active = playlists.length - 1;
+                    Lampa.Storage.set('iptv_pl_a', active);
+                    loadPlaylist();
+                }
+            );
+        }
+
+        function loadPlaylist() {
             $.ajax({
-                url: url,
-                success: function (text) {
-                    parse(text);
-                    renderGroups();
-                },
+                url: playlists[active].url,
+                success: parseM3U,
                 error: function () {
                     Lampa.Noty.show('Не удалось загрузить плейлист');
                 }
             });
         }
 
-        function parse(text) {
-            groups = { 'ВСЕ КАНАЛЫ': [] };
-            var lines = text.split('\n');
+        function parseM3U(str) {
+            groups = { '⭐ Избранное': [] };
+            all = [];
             var cur = null;
 
-            lines.forEach(function (l) {
+            str.split('\n').forEach(function (l) {
                 l = l.trim();
-
                 if (l.indexOf('#EXTINF') === 0) {
                     cur = {
-                        name: l.split(',').pop(),
-                        group: (l.match(/group-title="([^"]+)"/i) || [])[1] || 'ОБЩИЕ'
+                        name: (l.match(/,(.*)$/) || [,''])[1],
+                        id: (l.match(/tvg-id="([^"]+)"/i) || [,''])[1],
+                        logo: (l.match(/tvg-logo="([^"]+)"/i) || [,''])[1],
+                        group: (l.match(/group-title="([^"]+)"/i) || [,'ОБЩИЕ'])[1]
                     };
-                }
-                else if (l.indexOf('http') === 0 && cur) {
+                } else if (l.indexOf('http') === 0 && cur) {
                     cur.url = l;
-
+                    all.push(cur);
                     if (!groups[cur.group]) groups[cur.group] = [];
                     groups[cur.group].push(cur);
-                    groups['ВСЕ КАНАЛЫ'].push(cur);
-
                     cur = null;
                 }
             });
-        }
 
-        /* ================= RENDER ================= */
+            groups['⭐ Избранное'] = all.filter(c => fav.includes(c.name));
+            renderGroups();
+        }
 
         function renderGroups() {
-            list.empty();
+            colG.empty();
 
-            addBtn('➕ Добавить плейлист', addPlaylist);
+            $('<div class="selector item">➕ Добавить плейлист</div>')
+                .on('hover:enter', addPlaylist)
+                .appendTo(colG);
 
-            Object.keys(groups).sort().forEach(function (g) {
-                addBtn('📁 ' + g, function () {
-                    current_group = g;
-                    renderList(groups[g]);
-                });
+            Object.keys(groups).forEach(function (g) {
+                $('<div class="selector item">' + g + '</div>')
+                    .on('hover:enter', function () {
+                        renderChannels(groups[g]);
+                    })
+                    .appendTo(colG);
             });
 
-            focus();
+            focus(colG);
         }
 
-        function renderList(arr) {
-            list.empty();
+        function channelLogo(c){
+            if (c.logo) return c.logo;
+            if (c.id) return 'https://iptvx.one/logo/' + c.id + '.png';
+            return 'https://bylampa.github.io/img/iptv.png';
+        }
 
-            addBtn('⬅ Назад', renderGroups);
+        function renderChannels(list) {
+            colC.empty();
+            colE.empty();
 
-            arr.forEach(function (c) {
+            list.forEach(function (c) {
                 var row = $(`
-                    <div class="iptv-item selector">
-                        <div class="name">${c.name}</div>
+                    <div class="selector item chan">
+                        <div class="logo"><img></div>
+                        <div>
+                            <div class="name">${c.name}</div>
+                            <div class="sub">OK ▶</div>
+                        </div>
                     </div>
                 `);
+
+                row.find('img')
+                    .attr('src', channelLogo(c))
+                    .on('error', function () {
+                        this.src = 'https://bylampa.github.io/img/iptv.png';
+                    });
+
+                row.on('hover:focus', function () {
+                    updateInfo(c);
+                });
 
                 row.on('hover:enter', function () {
                     Lampa.Player.play({
                         url: c.url,
                         title: c.name,
-                        type: 'tv'
+                        type: 'tv',
+                        epg: true,
+                        epg_id: c.id || c.name
                     });
                 });
 
-                list.append(row);
+                colC.append(row);
             });
 
-            focus();
+            focus(colC);
         }
 
-        function addBtn(name, action) {
-            var btn = $(`
-                <div class="iptv-item iptv-btn selector">
-                    <div class="name">${name}</div>
-                </div>
-            `);
+        function updateInfo(c) {
+            colE.empty();
+            $('<div class="et">' + c.name + '</div>').appendTo(colE);
 
-            btn.on('hover:enter', action);
-            list.append(btn);
-        }
+            var text = 'Запустите канал для загрузки программы';
+            try {
+                if (Lampa.TV && Lampa.TV.getEPG) {
+                    var e = Lampa.TV.getEPG(c.id || c.name);
+                    if (e && e.current) {
+                        text = 'Сейчас: ' + e.current.title;
+                        if (e.current.time) text += ' (' + e.current.time + ')';
+                    }
+                }
+            } catch (e) {}
 
-        /* ================= UI HELPERS ================= */
-
-        function addPlaylist() {
-            Lampa.Input.edit({
-                title: 'Ссылка на M3U плейлист',
-                value: '',
-                free: true
-            }, function (val) {
-                if (!val) return;
-                Lampa.Storage.set('iptv_playlist_url', val);
-                load(val);
-            });
-        }
-
-        function focus() {
-            Lampa.Controller.enable('content');
-            var first = list.find('.selector').first();
-            if (first.length) Lampa.Controller.focus(first[0]);
+            $('<div class="er">' + text + '</div>').appendTo(colE);
         }
     }
 
-    /* ================= INIT ================= */
-
     function init() {
-        Lampa.Component.add('iptv_lite_stable', IPTVComponent);
-
-        $('.menu .menu__list').append(`
-            <li class="menu__item selector" data-action="iptv_lite_stable">
-                <div class="menu__text">IPTV</div>
-            </li>
-        `);
-
-        $('.menu [data-action="iptv_lite_stable"]').on('hover:enter', function () {
-            Lampa.Activity.push({
-                title: 'IPTV',
-                component: 'iptv_lite_stable',
-                page: 1
-            });
-        });
+        Lampa.Component.add('iptv', IPTVComponent);
+        $('.menu .menu__list').append(
+            $('<li class="menu__item selector"><div class="menu__text">IPTV</div></li>')
+                .on('hover:enter', function () {
+                    Lampa.Activity.push({ title: 'IPTV', component: 'iptv' });
+                })
+        );
     }
 
     if (window.app_ready) init();
-    else {
-        Lampa.Listener.follow('app', function (e) {
-            if (e.type === 'ready') init();
-        });
-    }
+    else Lampa.Listener.follow('app', function (e) {
+        if (e.type === 'ready') init();
+    });
 })();
