@@ -1,29 +1,32 @@
 // ==Lampa==
-// name: IPTV Stable Base (Lampac Safe)
-// version: 9.0.0
+// name: IPTV Canonical TV
+// version: 10.0.0
 // author: Artrax90
 // ==/Lampa==
 
 (function () {
     'use strict';
 
-    var PLAYLIST_URL = 'https://raw.githubusercontent.com/loganettv/playlists/refs/heads/main/mega.m3u';
+    var PLAYLIST = 'https://raw.githubusercontent.com/loganettv/playlists/refs/heads/main/mega.m3u';
 
     function IPTV() {
-        var html = $('<div class="iptv-wrap"></div>');
+        var html = $('<div class="iptv-page"></div>');
         var list = $('<div class="iptv-list"></div>');
         html.append(list);
 
         var items = [];
         var index = 0;
+        var enabled = false;
 
-        $('head').append(
-            '<style>' +
-            '.iptv-wrap{padding:20px}' +
-            '.iptv-item{padding:14px;margin-bottom:8px;background:#1a1d22;border-radius:10px}' +
-            '.iptv-item.focus{background:#2962ff}' +
-            '</style>'
-        );
+        if (!$('#iptv-style').length) {
+            $('head').append(
+                '<style id="iptv-style">' +
+                '.iptv-page{padding:20px}' +
+                '.iptv-item{padding:14px;margin-bottom:8px;background:#1a1d22;border-radius:10px}' +
+                '.iptv-item.focus{background:#2962ff}' +
+                '</style>'
+            );
+        }
 
         this.create = function () {
             load();
@@ -34,25 +37,31 @@
         };
 
         this.start = function () {
-            Lampa.Controller.enable('content');
-            focus();
+            enable();
         };
 
-        this.destroy = function () {};
+        this.stop = function () {
+            disable();
+        };
+
+        this.destroy = function () {
+            disable();
+        };
 
         function load() {
-            $.get(PLAYLIST_URL, parse);
+            $.get(PLAYLIST, parse);
         }
 
         function parse(text) {
             items = [];
             list.empty();
+            index = 0;
 
             var lines = text.split('\n');
             var cur = null;
 
             for (var i = 0; i < lines.length; i++) {
-                var l = lines[i].trim();
+                var l = lines[i];
 
                 if (l.indexOf('#EXTINF') === 0) {
                     cur = { name: l.split(',')[1] || '' };
@@ -60,29 +69,42 @@
                 else if (l.indexOf('http') === 0 && cur) {
                     cur.url = l;
                     items.push(cur);
-
-                    list.append('<div class="iptv-item selector">' + cur.name + '</div>');
+                    list.append('<div class="iptv-item">' + cur.name + '</div>');
                     cur = null;
                 }
             }
 
-            focus();
+            render();
         }
 
-        function focus() {
-            var els = list.find('.selector');
+        function render() {
+            var els = list.find('.iptv-item');
             els.removeClass('focus');
             if (els[index]) $(els[index]).addClass('focus');
         }
 
-        Lampa.Controller.add('iptv', {
+        function enable() {
+            if (enabled) return;
+            enabled = true;
+            Lampa.Controller.add('iptv', controller);
+            Lampa.Controller.toggle('iptv');
+            render();
+        }
+
+        function disable() {
+            if (!enabled) return;
+            enabled = false;
+            Lampa.Controller.remove('iptv');
+        }
+
+        var controller = {
             up: function () {
                 if (index > 0) index--;
-                focus();
+                render();
             },
             down: function () {
                 if (index < items.length - 1) index++;
-                focus();
+                render();
             },
             enter: function () {
                 var c = items[index];
@@ -96,7 +118,7 @@
             back: function () {
                 Lampa.Activity.backward();
             }
-        });
+        };
     }
 
     function init() {
