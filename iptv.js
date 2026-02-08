@@ -1,6 +1,6 @@
 // ==Lampa==
-// name: IPTV TV-Fix Ultimate
-// version: 5.0
+// name: IPTV Fixed & Safe
+// version: 5.1
 // author: Artrax90 & Gemini
 // ==/Lampa==
 
@@ -19,12 +19,12 @@
         var colC = $('<div class="iptv-col c"></div>');
         var colE = $('<div class="iptv-col e"></div>');
         
-        // Переменные состояния
         var playlists = Lampa.Storage.get('iptv_pl', [DEFAULT_PLAYLIST]);
         var active_pl_index = Lampa.Storage.get('iptv_pl_a', 0);
         var fav = Lampa.Storage.get('iptv_fav', []);
         var groups = {};
         var all_channels = [];
+        var last_focus = null; // Запоминаем, где был фокус
 
         // Стили
         if (!$('#iptv-style-5').length) {
@@ -54,49 +54,81 @@
 
         this.create = function () {
             root.append(colG, colC, colE);
+            colG.append('<div class="item" style="opacity:0.5">Загрузка...</div>');
             
-            // 1. Создаем контроллер один раз
+            // Регистрируем контроллер, но пока НЕ активируем его
             Lampa.Controller.add('iptv_plugin', {
                 toggle: function () {
-                    // При активации собираем ВСЕ кнопки с классом selector
-                    Lampa.Controller.collectionSet(root.find('.selector'));
-                    Lampa.Controller.collectionFocus(false, root.find('.selector.focus').length ? root.find('.selector.focus')[0] : null);
-                },
-                left: function () {
-                    // Особая логика: если мы в левой колонке (группы) и жмем влево -> Меню
-                    if (Lampa.Controller.own(this) && $(document.activeElement).closest('.g').length) {
-                        Lampa.Controller.toggle('menu');
-                    } else {
-                        // Иначе пусть Лампа сама ищет кнопку слева
-                        Lampa.Controller.move('left'); 
+                    var items = root.find('.selector');
+                    if(items.length){
+                        Lampa.Controller.collectionSet(items);
+                        // Если есть запомненный фокус - вернем его, иначе первый элемент
+                        var to_focus = (last_focus && $(last_focus).is(':visible')) ? last_focus : items[0];
+                        Lampa.Controller.focus(to_focus);
                     }
                 },
-                right: function() { Lampa.Controller.move('right'); },
-                up: function() { Lampa.Controller.move('up'); },
-                down: function() { Lampa.Controller.move('down'); },
+                left: function () {
+                    if (Lampa.Controller.own(this)) {
+                        var focused = $(document.activeElement);
+                        if (focused.closest('.g').length) {
+                            Lampa.Controller.toggle('menu'); // Из левой колонки в меню
+                        } else {
+                            // Иначе ищем ближайший элемент слева
+                            var leftItem = getClosest(focused, 'left');
+                            if(leftItem) Lampa.Controller.focus(leftItem);
+                        }
+                    }
+                },
+                right: function() { handleMove('right'); },
+                up: function() { handleMove('up'); },
+                down: function() { handleMove('down'); },
                 back: function() { Lampa.Activity.back(); }
             });
 
-            renderGroups();
+            // Начинаем загрузку, но НЕ ставим фокус сразу
             loadPlaylist();
         };
 
-        // Обновляем "карту" для пульта
-        function refreshNavigation(focus_first) {
-            // Сообщаем контроллеру о новых кнопках
-            Lampa.Controller.collectionSet(root.find('.selector'));
-            
-            if (focus_first) {
-                var first = focus_first.find('.selector').first();
-                if (first.length) Lampa.Controller.focus(first[0]);
+        // Вспомогательная функция для движения (чтобы не зависеть от Lampa.move)
+        function handleMove(direction) {
+            var current = $(document.activeElement);
+            // Если Lampa сама справится - ок, если нет - пробуем свою логику
+            Lampa.Controller.move(direction); 
+        }
+        
+        // Ручной поиск ближайшего элемента (для надежности на ТВ)
+        function getClosest(el, dir) {
+            // Упрощенная логика: если в каналах и жмем влево -> в группы
+            if(dir === 'left' && el.closest('.c').length) {
+                // Пытаемся найти активную группу или первую
+                var group = colG.find('.selector.focus').first(); 
+                if(!group.length) group = colG.find('.selector').first();
+                return group[0];
+            }
+            return null;
+        }
+
+        function safeUpdateController() {
+            // Обновляем коллекцию пульта только если мы активны
+            if (Lampa.Activity.active().component === 'iptv_full') {
+                var items = root.find('.selector');
+                if (items.length) {
+                    Lampa.Controller.collectionSet(items);
+                }
             }
         }
 
         function loadPlaylist() {
             $.ajax({
                 url: playlists[active_pl_index].url,
-                success: function(str) { parseM3U(str); },
-                error: function() { Lampa.Noty.show('Ошибка загрузки M3U'); }
+                success: function(str) { 
+                    parseM3U(str); 
+                },
+                error: function() { 
+                    Lampa.Noty.show('Ошибка загрузки M3U'); 
+                    colG.html('<div class="selector item">Ошибка. Назад</div>').on('click', function(){Lampa.Activity.back()});
+                    safeUpdateController();
+                }
             });
         }
 
@@ -113,7 +145,6 @@
                     var m_logo = (l.match(/tvg-logo="([^"]+)"/i) || [,''])[1];
                     var m_group = (l.match(/group-title="([^"]+)"/i) || [,'ОБЩИЕ'])[1];
                     var m_id = (l.match(/tvg-id="([^"]+)"/i) || [,''])[1];
-                    
                     cur = { name: m_name, logo: m_logo, group: m_group, id: m_id };
                 } else if (l.indexOf('http') === 0 && cur) {
                     cur.url = l;
@@ -132,11 +163,11 @@
             colG.empty();
             
             // Кнопка добавления
-            var addBtn = $('<div class="selector item" style="color:#2962ff"><b>+ Добавить URL</b></div>');
+            var addBtn = $('<div class="selector item" style="color:#2962ff"><b>+ Плейлист</b></div>');
             addBtn.on('hover:enter', function() {
-                 Lampa.Input.edit({ value: '', free: true, title: 'URL плейлиста' }, function(val){
+                 Lampa.Input.edit({ value: '', free: true, title: 'URL' }, function(val){
                      if(val){
-                         playlists.push({name: 'User List', url: val});
+                         playlists.push({name: 'New', url: val});
                          Lampa.Storage.set('iptv_pl', playlists);
                          active_pl_index = playlists.length -1;
                          Lampa.Storage.set('iptv_pl_a', active_pl_index);
@@ -146,17 +177,27 @@
             });
             colG.append(addBtn);
 
-            // Рендер групп
             Object.keys(groups).forEach(function (g) {
-                var item = $('<div class="selector item">' + g + ' <small>(' + groups[g].length + ')</small></div>');
-                item.on('hover:enter', function () { renderChannels(groups[g]); });
-                // При фокусе на группе - обновляем инфо
-                item.on('hover:focus', function() { colE.empty().append('<div class="info-title">'+g+'</div>'); });
+                var item = $('<div class="selector item">' + g + '</div>');
+                item.on('hover:enter', function () { 
+                    renderChannels(groups[g]); 
+                    last_focus = this; // Запоминаем эту группу
+                });
+                item.on('hover:focus', function() { 
+                    last_focus = this;
+                    colE.empty().append('<div class="info-title">'+g+'</div>'); 
+                });
                 colG.append(item);
             });
 
-            // ВАЖНО: Обновляем пульт
-            refreshNavigation(colG);
+            // ВАЖНО: Активируем контроллер только сейчас, когда элементы есть в DOM
+            safeUpdateController();
+            
+            // Если это первый запуск и фокуса нет - ставим на первую группу
+            if(!root.find('.focus').length) {
+                var first = colG.find('.selector').first();
+                if(first.length) Lampa.Controller.focus(first[0]);
+            }
         }
 
         function renderChannels(list) {
@@ -172,7 +213,10 @@
                     </div>
                 `);
 
-                row.on('hover:focus', function () { showEPG(c); });
+                row.on('hover:focus', function () { 
+                    showEPG(c); 
+                    last_focus = this; // Запоминаем канал
+                });
                 row.on('hover:enter', function () {
                     Lampa.Player.play({ url: c.url, title: c.name, type: 'tv', epg: true, epg_id: c.id || c.name });
                     addToFav(c);
@@ -180,8 +224,12 @@
                 colC.append(row);
             });
 
-            // ВАЖНО: Обновляем пульт и ставим фокус на первый канал
-            refreshNavigation(colC);
+            // Обновляем коллекцию кнопок
+            safeUpdateController();
+            
+            // Перекидываем фокус на первый канал
+            var firstChan = colC.find('.selector').first();
+            if(firstChan.length) Lampa.Controller.focus(firstChan[0]);
         }
 
         function showEPG(c) {
@@ -197,7 +245,7 @@
                         <div>${epg.current.title}</div>
                     `);
                 } else {
-                    html.find('.info-epg').text('Нет данных телегида');
+                    html.find('.info-epg').text('Нет данных');
                 }
             }
         }
@@ -210,7 +258,10 @@
         }
 
         this.start = function () {
+            // Включаем контроллер
             Lampa.Controller.toggle('iptv_plugin');
+            // Если данные уже были загружены ранее - обновим состояние
+            safeUpdateController();
         };
 
         this.pause = function () {};
