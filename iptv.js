@@ -1,6 +1,6 @@
 // ==Lampa==
 // name: IPTV PRO Final Fix
-// version: 11.4
+// version: 11.5
 // ==/Lampa==
 
 (function () {
@@ -51,14 +51,16 @@
             colC = $('<div class="iptv-col"></div>');
             root.append(colG, colC);
 
-            $('head').append(`
-                <style>
-                .iptv-root{display:flex;height:100%;background:#0b0d10}
-                .iptv-col{flex:1;overflow:auto}
-                .iptv-item{padding:1rem;margin:.4rem;background:#222;color:#fff;border-radius:.4rem}
-                .iptv-item.active{background:#2962ff}
-                </style>
-            `);
+            if (!$('#iptv_pro_style').length) {
+                $('head').append(`
+                    <style id="iptv_pro_style">
+                        .iptv-root{display:flex;height:100%;background:#0b0d10}
+                        .iptv-col{flex:1;overflow:auto}
+                        .iptv-item{padding:1rem;margin:.4rem;background:#222;color:#fff;border-radius:.4rem}
+                        .iptv-item.active{background:#2962ff}
+                    </style>
+                `);
+            }
 
             this.loadPlaylist();
             return root;
@@ -156,5 +158,26 @@
         this.destroy = () => Lampa.Controller.remove('iptv_pro');
     }
 
-    Lampa.Component.add('iptv_pro', IPTVComponent);
+    function init() {
+        Lampa.Component.add('iptv_pro', IPTVComponent);
+
+        var item = $('<li class="menu__item selector">' +
+            '<div class="menu__text">IPTV PRO</div>' +
+        '</li>');
+
+        item.on('hover:enter', function () {
+            Lampa.Activity.push({
+                title: 'IPTV PRO',
+                component: 'iptv_pro',
+                page: 1
+            });
+        });
+
+        $('.menu .menu__list').append(item);
+    }
+
+    if (window.app_ready) init();
+    else Lampa.Listener.follow('app', function (e) {
+        if (e.type === 'ready') init();
+    });
 })();
