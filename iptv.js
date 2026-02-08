@@ -1,6 +1,6 @@
 // ==Lampa==
 // name: IPTV PRO Final Fix
-// version: 11.3
+// version: 11.4
 // ==/Lampa==
 
 (function () {
@@ -23,8 +23,6 @@
             favorites: [],
             current_pl_index: 0
         });
-
-        /* ================= CREATE ================= */
 
         this.create = function () {
             root = $('<div class="iptv-root"></div>');
@@ -56,25 +54,19 @@
             return root;
         };
 
-        /* ================= PLAYLIST LOAD ================= */
-
         this.loadPlaylist = function () {
             var current = config.playlists[config.current_pl_index];
             if (!current) return;
 
             $.ajax({
                 url: current.url,
-                success: function (str) {
-                    _this.parse(str);
-                },
+                success: function (str) { _this.parse(str); },
                 error: function () {
                     Lampa.Noty.show('Ошибка загрузки плейлиста');
                     _this.parse('');
                 }
             });
         };
-
-        /* ================= PARSE ================= */
 
         this.parse = function (str) {
             var lines = str.split('\n');
@@ -99,8 +91,6 @@
             this.renderG();
         };
 
-        /* ================= GROUPS ================= */
-
         this.renderG = function () {
             colG.empty();
 
@@ -113,7 +103,6 @@
             colG.append(btnAdd, btnSearch);
 
             Object.keys(groups_data).forEach(function (g, i) {
-                consider:
                 var item = $('<div class="iptv-item">' + g + '</div>');
                 item.on('click', function () {
                     index_g = i;
@@ -126,8 +115,6 @@
             this.updateFocus();
         };
 
-        /* ================= PLAYLIST MENU ================= */
-
         this.playlistMenu = function () {
             var html = $('<div></div>');
 
@@ -136,7 +123,7 @@
                 row.on('click', function () {
                     config.current_pl_index = i;
                     Lampa.Storage.set(storage_key, config);
-                    Lampa.Activity.close();
+                    Lampa.Modal.close();
                     _this.loadPlaylist();
                 });
                 html.append(row);
@@ -156,6 +143,7 @@
                     });
                     config.current_pl_index = config.playlists.length - 1;
                     Lampa.Storage.set(storage_key, config);
+                    Lampa.Modal.close();
                     _this.loadPlaylist();
                 });
             });
@@ -167,8 +155,6 @@
                 html: html
             });
         };
-
-        /* ================= SEARCH ================= */
 
         this.searchChannels = function () {
             Lampa.Input.edit({
@@ -187,8 +173,6 @@
             });
         };
 
-        /* ================= CHANNELS ================= */
-
         this.renderC = function (list) {
             colC.empty();
             current_list = list || [];
@@ -202,15 +186,11 @@
             this.updateFocus();
         };
 
-        /* ================= FOCUS ================= */
-
         this.updateFocus = function () {
             $('.iptv-item').removeClass('active');
             if (active_col === 'groups') colG.find('.iptv-item').eq(index_g).addClass('active');
             else colC.find('.iptv-item').eq(index_c).addClass('active');
         };
-
-        /* ================= CONTROLLER ================= */
 
         this.start = function () {
             Lampa.Controller.add('iptv_pro', {
@@ -268,6 +248,6 @@
 
     if (window.app_ready) init();
     else Lampa.Listener.follow('app', function (e) {
-        if (e.type === 'ready') init();
+        if (e.type == 'ready') init();
     });
 })();
