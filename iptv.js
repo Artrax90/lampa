@@ -1,6 +1,6 @@
 // ==Lampa==
 // name: IPTV PRO Final Fix
-// version: 11.5
+// version: 11.6
 // ==/Lampa==
 
 (function () {
@@ -24,6 +24,8 @@
             current_pl_index: 0
         });
 
+        /* ================= CREATE ================= */
+
         this.create = function () {
             root = $('<div class="iptv-root"></div>');
             var container = $('<div class="iptv-wrapper"></div>');
@@ -44,6 +46,7 @@
                     .col-details { width: 25rem; background: #080a0d; padding: 2rem; }
                     .iptv-item { padding: 1rem; margin: 0.4rem; border-radius: 0.5rem; background: rgba(255,255,255,0.03); color: #fff; cursor: pointer; }
                     .iptv-item.active { background: #2962ff !important; }
+                    .iptv-item.warn { background: #b71c1c !important; }
                     .btn-pl, .btn-search { padding: 1rem; margin: 0.5rem 1rem; text-align: center; border-radius: 0.5rem; cursor: pointer; color: #fff; font-weight: bold; }
                     .btn-pl { background: #2962ff; }
                     .btn-search { background: #444; }
@@ -53,6 +56,8 @@
             this.loadPlaylist();
             return root;
         };
+
+        /* ================= LOAD ================= */
 
         this.loadPlaylist = function () {
             var current = config.playlists[config.current_pl_index];
@@ -67,6 +72,8 @@
                 }
             });
         };
+
+        /* ================= PARSE ================= */
 
         this.parse = function (str) {
             var lines = str.split('\n');
@@ -90,6 +97,8 @@
             }
             this.renderG();
         };
+
+        /* ================= GROUPS ================= */
 
         this.renderG = function () {
             colG.empty();
@@ -115,25 +124,56 @@
             this.updateFocus();
         };
 
-        /* === ИСПРАВЛЕНИЕ ТУТ === */
+        /* ================= PLAYLIST MENU ================= */
+
         this.playlistMenu = function () {
             var html = $('<div></div>');
 
             config.playlists.forEach(function (pl, i) {
                 var row = $('<div class="iptv-item">' + pl.name + '</div>');
+
+                // обычный клик — выбрать
                 row.on('click', function () {
                     config.current_pl_index = i;
                     Lampa.Storage.set(storage_key, config);
                     Lampa.Modal.close();
                     _this.loadPlaylist();
                 });
+
+                // HOLD — удалить
+                row.on('hover:hold', function () {
+                    if (config.playlists.length <= 1) {
+                        Lampa.Noty.show('Нельзя удалить последний плейлист');
+                        return;
+                    }
+                    if (i === config.current_pl_index) {
+                        Lampa.Noty.show('Нельзя удалить активный плейлист');
+                        return;
+                    }
+
+                    row.addClass('warn');
+
+                    Lampa.Modal.confirm({
+                        title: 'Удалить плейлист?',
+                        text: pl.name,
+                        confirm: function () {
+                            config.playlists.splice(i, 1);
+                            if (config.current_pl_index > i) config.current_pl_index--;
+                            Lampa.Storage.set(storage_key, config);
+                            Lampa.Modal.close();
+                        },
+                        cancel: function () {
+                            row.removeClass('warn');
+                        }
+                    });
+                });
+
                 html.append(row);
             });
 
             var add = $('<div class="iptv-item">➕ Добавить плейлист</div>');
             add.on('click', function () {
                 Lampa.Modal.close();
-
                 setTimeout(function () {
                     Lampa.Input.edit({
                         title: 'URL плейлиста',
@@ -160,6 +200,8 @@
             });
         };
 
+        /* ================= SEARCH ================= */
+
         this.searchChannels = function () {
             Lampa.Input.edit({
                 title: 'Поиск канала',
@@ -177,6 +219,8 @@
             });
         };
 
+        /* ================= CHANNELS ================= */
+
         this.renderC = function (list) {
             colC.empty();
             current_list = list || [];
@@ -190,11 +234,15 @@
             this.updateFocus();
         };
 
+        /* ================= FOCUS ================= */
+
         this.updateFocus = function () {
             $('.iptv-item').removeClass('active');
             if (active_col === 'groups') colG.find('.iptv-item').eq(index_g).addClass('active');
             else colC.find('.iptv-item').eq(index_c).addClass('active');
         };
+
+        /* ================= CONTROLLER ================= */
 
         this.start = function () {
             Lampa.Controller.add('iptv_pro', {
