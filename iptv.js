@@ -1,6 +1,6 @@
 // ==Lampa==
-// name: IPTV TV-Stable
-// version: 5.3
+// name: IPTV TV-NoLoop
+// version: 5.4
 // author: Artrax90 & Gemini
 // ==/Lampa==
 
@@ -24,57 +24,59 @@
         var fav = Lampa.Storage.get('iptv_fav', []);
         var groups = {};
 
-        // Исправленные стили
-        if (!$('#iptv-style-final').length) {
+        // Чистый CSS без лишних наслоений
+        if (!$('#iptv-style-v54').length) {
             $('head').append(`
-            <style id="iptv-style-final">
-                .iptv-root { display: flex; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: #0b0d10; z-index: 10; overflow: hidden; }
-                .iptv-col { height: 100%; overflow-y: auto; padding: 20px 10px; box-sizing: border-box; }
+            <style id="iptv-style-v54">
+                .iptv-root { display: flex; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #0b0d10; z-index: 100; }
+                .iptv-col { height: 100%; overflow-y: auto; box-sizing: border-box; display: flex; flex-direction: column; }
                 .iptv-col::-webkit-scrollbar { width: 0; }
                 
-                .g { width: 250px; background: #14171b; border-right: 2px solid #1f2328; }
-                .c { flex: 1; background: #0b0d10; }
-                .e { width: 350px; background: #080a0d; border-left: 2px solid #1f2328; }
+                .g { width: 20%; background: #14171b; border-right: 1px solid #2a2e33; padding: 10px; }
+                .c { width: 50%; background: #0b0d10; padding: 10px; }
+                .e { width: 30%; background: #080a0d; border-left: 1px solid #2a2e33; padding: 20px; }
 
-                .item { padding: 12px 15px; margin-bottom: 8px; border-radius: 8px; cursor: pointer; border: 2px solid transparent; background: rgba(255,255,255,0.03); }
-                .item.focus { background: #2962ff !important; border-color: #fff; transform: scale(1.02); }
+                .item { padding: 12px; margin-bottom: 5px; border-radius: 8px; cursor: pointer; color: #fff; background: rgba(255,255,255,0.05); border: 2px solid transparent; flex-shrink: 0; }
+                .item.focus { background: #2962ff !important; border-color: #fff; }
                 
                 .chan { display: flex; align-items: center; }
-                .logo { width: 50px; height: 30px; background: #000; margin-right: 12px; border-radius: 4px; flex-shrink: 0; overflow: hidden; }
+                .logo { width: 40px; height: 25px; margin-right: 10px; background: #000; border-radius: 4px; overflow: hidden; flex-shrink: 0; }
                 .logo img { width: 100%; height: 100%; object-fit: contain; }
-                .name { font-size: 1.1em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+                .name { font-size: 1em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
                 
-                .info-content { padding: 20px; }
-                .info-title { font-size: 1.8em; font-weight: bold; margin-bottom: 15px; }
+                .info-title { font-size: 1.5em; font-weight: bold; margin-bottom: 10px; }
             </style>`);
         }
 
         this.create = function () {
             root.append(colG, colC, colE);
             
+            // Регистрируем пустой контроллер. 
+            // Мы не переопределяем up/down, чтобы не было цикла.
             Lampa.Controller.add('iptv_plugin', {
                 toggle: function () {
-                    _this.updateNav();
+                    _this.refreshNav();
                 },
-                left: function () {
-                    var focused = root.find('.focus');
-                    if (focused.closest('.g').length) Lampa.Activity.back();
+                left: function() {
+                    // Единственная кастомная кнопка - выход в меню
+                    if (root.find('.g .focus').length) Lampa.Controller.toggle('menu');
                     else Lampa.Controller.move('left');
                 },
-                right: function() { Lampa.Controller.move('right'); },
-                up: function() { Lampa.Controller.move('up'); },
-                down: function() { Lampa.Controller.move('down'); },
-                back: function() { Lampa.Activity.back(); }
+                back: function() {
+                    Lampa.Activity.back();
+                }
             });
 
             this.load();
         };
 
-        this.updateNav = function () {
-            var items = root.find('.selector:visible');
-            if (items.length) {
-                Lampa.Controller.collectionSet(root);
-                if (!root.find('.focus').length) Lampa.Controller.focus(items[0]);
+        this.refreshNav = function () {
+            // Сообщаем системе, что все элементы .selector теперь доступны для пульта
+            Lampa.Controller.collectionSet(root);
+            var active = root.find('.focus');
+            if (!active.length) {
+                var first = root.find('.selector').first();
+                if (first.length) Lampa.Controller.focus(first[0]);
             }
         };
 
@@ -83,56 +85,52 @@
             $.ajax({
                 url: playlists[active_pl].url,
                 success: function(str) { _this.parse(str); },
-                error: function() { Lampa.Noty.show('Ошибка M3U'); }
+                error: function() { Lampa.Noty.show('Ошибка загрузки'); }
             });
         };
 
         this.parse = function (str) {
             groups = { '⭐ Избранное': [] };
             var channels = [];
-            var lines = str.split('\n');
-            var cur = null;
-
-            lines.forEach(function (l) {
+            str.split('\n').forEach(function (l) {
                 l = l.trim();
                 if (l.indexOf('#EXTINF') === 0) {
                     var n = (l.match(/,(.*)$/) || [,''])[1];
                     var lg = (l.match(/tvg-logo="([^"]+)"/i) || [,''])[1];
                     var g = (l.match(/group-title="([^"]+)"/i) || [,'ОБЩИЕ'])[1];
-                    cur = { name: n, logo: lg, group: g };
-                } else if (l.indexOf('http') === 0 && cur) {
-                    cur.url = l;
-                    channels.push(cur);
-                    if (!groups[cur.group]) groups[cur.group] = [];
-                    groups[cur.group].push(cur);
-                    cur = null;
+                    channels.push({ name: n, logo: lg, group: g });
+                } else if (l.indexOf('http') === 0 && channels.length > 0) {
+                    channels[channels.length-1].url = l;
+                    var itm = channels[channels.length-1];
+                    if (!groups[itm.group]) groups[itm.group] = [];
+                    groups[itm.group].push(itm);
                 }
             });
             groups['⭐ Избранное'] = channels.filter(c => fav.includes(c.name));
-            this.renderG();
+            this.renderGroups();
         };
 
-        this.renderG = function () {
+        this.renderGroups = function () {
             colG.empty();
             // Кнопка настройки
-            var set = $('<div class="selector item">⚙️ Плейлисты</div>').on('hover:enter', function() {
-                Lampa.Input.edit({value: '', free: true, title: 'URL плейлиста'}, function(v) {
+            var add = $('<div class="selector item">+ Добавить плейлист</div>').on('hover:enter', function() {
+                Lampa.Input.edit({value: '', free: true, title: 'URL'}, function(v) {
                     if(v) { playlists.push({name: 'New', url: v}); Lampa.Storage.set('iptv_pl', playlists); _this.load(); }
                 });
             });
-            colG.append(set);
+            colG.append(add);
 
             Object.keys(groups).forEach(function(g) {
                 if (groups[g].length === 0 && g !== '⭐ Избранное') return;
                 var item = $('<div class="selector item">' + g + '</div>');
-                item.on('hover:enter', function() { _this.renderC(groups[g]); });
-                item.on('hover:focus', function() { colE.html('<div class="info-content"><div class="info-title">'+g+'</div></div>'); });
+                item.on('hover:enter', function() { _this.renderChannels(groups[g]); });
+                item.on('hover:focus', function() { colE.html('<div class="info-title">'+g+'</div>'); });
                 colG.append(item);
             });
-            this.updateNav();
+            this.refreshNav();
         };
 
-        this.renderC = function (list) {
+        this.renderChannels = function (list) {
             colC.empty();
             list.forEach(function(c) {
                 var row = $(`<div class="selector item chan"><div class="logo"><img src="${c.logo || ''}"></div><div class="name">${c.name}</div></div>`);
@@ -141,28 +139,28 @@
                     if(!fav.includes(c.name)) { fav.push(c.name); Lampa.Storage.set('iptv_fav', fav); }
                 });
                 row.on('hover:focus', function() {
-                    colE.html(`<div class="info-content"><div class="info-title">${c.name}</div><p>Нажмите ОК для просмотра</p></div>`);
+                    colE.html(`<div class="info-title">${c.name}</div><div>Нажмите ОК для просмотра</div>`);
                 });
                 colC.append(row);
             });
-            this.updateNav();
-            Lampa.Controller.focus(colC.find('.selector')[0]);
+            this.refreshNav();
+            // Сразу фокусируем первый канал
+            var first = colC.find('.selector').first();
+            if(first.length) Lampa.Controller.focus(first[0]);
         };
 
         this.render = function () { return root; };
         this.start = function () {
             Lampa.Controller.toggle('iptv_plugin');
-            // Даем ТВ время «продышаться»
-            setTimeout(_this.updateNav, 100);
         };
         this.pause = this.stop = function () {};
         this.destroy = function () { root.remove(); };
     }
 
     function init() {
-        Lampa.Component.add('iptv_stable', IPTVComponent);
+        Lampa.Component.add('iptv_final', IPTVComponent);
         var item = $('<li class="menu__item selector"><div class="menu__text">IPTV</div></li>');
-        item.on('hover:enter', function () { Lampa.Activity.push({ title: 'IPTV', component: 'iptv_stable' }); });
+        item.on('hover:enter', function () { Lampa.Activity.push({ title: 'IPTV', component: 'iptv_final' }); });
         $('.menu .menu__list').append(item);
     }
 
