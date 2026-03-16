@@ -1,13 +1,13 @@
 // ==Lampa==
 // name: IPTV PRO TV Rebuild
-// version: 2.4.2
+// version: 2.4.3
 // ==/Lampa==
 
 (function () {
     'use strict';
 
     function IPTVTvComponent() {
-        var storage_key = 'iptv_tv_rebuild_v242';
+        var storage_key = 'iptv_tv_rebuild_v243';
         var controller_name = 'iptv_tv_rebuild';
         var root, mainScreen, overlayScreen, leftCol, centerCol, rightCol;
 
@@ -746,11 +746,23 @@
             else if (item.action === 'remove_playlist') removeCurrentPlaylist();
         }
 
-        function ensureVisible(container, element) {
+        function ensureVisible(container, element, index) {
             if (!container || !container.length || !element || !element.length) return;
 
             var c = container[0];
             var e = element[0];
+
+            if (typeof index === 'number') {
+                if (index <= 0) {
+                    c.scrollTop = 0;
+                    return;
+                }
+
+                if (index <= 1) {
+                    c.scrollTop = 0;
+                    return;
+                }
+            }
 
             var cTop = c.scrollTop;
             var cHeight = c.clientHeight;
@@ -778,20 +790,20 @@
             if (view === 'browser') {
                 if (state.activeColumn === 'left') {
                     var leftItem = leftCol.find('.iptv-item').eq(state.leftIndex).addClass('active');
-                    ensureVisible(leftCol, leftItem);
+                    ensureVisible(leftCol, leftItem, state.leftIndex);
                 } else if (state.activeColumn === 'center') {
                     var centerItem = centerCol.find('.iptv-item').eq(state.centerIndex).addClass('active');
-                    ensureVisible(centerCol, centerItem);
+                    ensureVisible(centerCol, centerItem, state.centerIndex);
                 } else if (state.activeColumn === 'right') {
                     var rightItem = rightCol.find('.iptv-item').eq(state.rightIndex).addClass('active');
-                    ensureVisible(rightCol, rightItem);
+                    ensureVisible(rightCol, rightItem, state.rightIndex);
                 }
                 return;
             }
 
             if (view === 'playlists') {
                 var playlistItem = overlayScreen.find('.iptv-overlay-panel .iptv-item').eq(state.overlayListIndex).addClass('active');
-                ensureVisible(overlayScreen.find('.iptv-overlay-panel'), playlistItem);
+                ensureVisible(overlayScreen.find('.iptv-overlay-panel'), playlistItem, state.overlayListIndex);
                 return;
             }
 
