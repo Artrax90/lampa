@@ -1,6 +1,6 @@
 // ==Lampa==
 // name: IPTV PRO TV Rebuild
-// version: 2.0.0
+// version: 2.1.0
 // ==/Lampa==
 
 (function () {
@@ -9,19 +9,15 @@
     function IPTVTvComponent() {
         var _this = this;
 
-        var storage_key = 'iptv_tv_rebuild_v2';
+        var storage_key = 'iptv_tv_rebuild_v21';
         var controller_name = 'iptv_tv_rebuild';
+        var root, mainScreen, overlayScreen, leftCol, centerCol, rightCol;
 
-        var root;
-        var mainScreen;
-        var overlayScreen;
-
-        var leftCol;
-        var centerCol;
-        var rightCol;
-
-        var view = 'browser'; // browser | playlists | keyboard | search
+        var view = 'browser'; // browser | playlists | keyboard
         var keyboardMode = 'add'; // add | search
+        var keyboardLang = 'en';
+        var playerWasOpened = false;
+        var controllerReady = false;
 
         var config = loadConfig();
 
@@ -33,12 +29,11 @@
             playlistItems: [],
             rightItems: [],
 
-            activeColumn: 'left', // left | center | right
+            activeColumn: 'left',
             leftIndex: 0,
             centerIndex: 0,
             rightIndex: 0,
 
-            overlayColumn: 'list', // list | keys
             overlayListIndex: 0,
             overlayKeyIndex: 0,
 
@@ -47,12 +42,26 @@
             lastGroup: config.lastGroup || '⭐ Избранное'
         };
 
-        var KEYBOARD_ROWS = [
-            ['h','t','t','p',':','/','/','.','-','_'],
-            ['a','b','c','d','e','f','g','h','i','j'],
-            ['k','l','m','n','o','p','q','r','s','t'],
-            ['u','v','w','x','y','z','0','1','2','3'],
-            ['4','5','6','7','8','9',':','/','.','?']
+        var KEYBOARDS = {
+            en: [
+                'q','w','e','r','t','y','u','i','o','p',
+                'a','s','d','f','g','h','j','k','l','@',
+                'z','x','c','v','b','n','m','.','/','-',
+                '0','1','2','3','4','5','6','7','8','9'
+            ],
+            ru: [
+                'й','ц','у','к','е','н','г','ш','щ','з',
+                'ф','ы','в','а','п','р','о','л','д','ж',
+                'я','ч','с','м','и','т','ь','б','ю','э',
+                '0','1','2','3','4','5','6','7','8','9'
+            ]
+        };
+
+        var KEYBOARD_ACTIONS = [
+            { code: 'space', title: 'Пробел' },
+            { code: 'backspace', title: 'Стереть' },
+            { code: 'lang', title: 'EN/RU' },
+            { code: 'submit', title: 'Готово' }
         ];
 
         function loadConfig() {
@@ -141,9 +150,7 @@
             if (!channel || !channel.url) return;
 
             var found = -1;
-            var i;
-
-            for (i = 0; i < config.favorites.length; i++) {
+            for (var i = 0; i < config.favorites.length; i++) {
                 if (config.favorites[i].url === channel.url) {
                     found = i;
                     break;
@@ -212,10 +219,12 @@
                 '.iptv-overlay-panel{width:28rem;border-right:1px solid rgba(255,255,255,0.08);overflow-y:auto;background:rgba(255,255,255,0.03);}' +
                 '.iptv-overlay-main{flex:1;padding:2rem;overflow-y:auto;}' +
                 '.iptv-display{padding:1rem;border-radius:0.5rem;background:rgba(255,255,255,0.06);word-break:break-all;margin-bottom:1.5rem;min-height:3.2rem;}' +
+                '.iptv-kb-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;}' +
+                '.iptv-kb-lang{padding:0.6rem 1rem;border-radius:0.5rem;background:rgba(255,255,255,0.05);}' +
                 '.iptv-keyboard{display:grid;grid-template-columns:repeat(10,1fr);gap:0.5rem;}' +
                 '.iptv-key{padding:0.8rem 0.4rem;text-align:center;border-radius:0.5rem;background:rgba(255,255,255,0.05);}' +
                 '.iptv-key.active{background:#2962ff!important;}' +
-                '.iptv-actions{display:grid;grid-template-columns:repeat(3,1fr);gap:0.5rem;margin-top:1rem;}' +
+                '.iptv-actions{display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-top:1rem;}' +
                 '.iptv-action-btn{padding:1rem;text-align:center;border-radius:0.5rem;background:rgba(255,255,255,0.05);}' +
                 '.iptv-action-btn.active{background:#2962ff!important;}' +
                 '</style>'
@@ -256,8 +265,7 @@
         }
 
         function syncGroupSelection() {
-            var i;
-            var target = -1;
+            var i, target = -1;
 
             for (i = 0; i < state.leftItems.length; i++) {
                 if (state.leftItems[i].type === 'group' && state.leftItems[i].group === state.lastGroup) {
@@ -406,9 +414,7 @@
             }
 
             state.currentChannels.forEach(function (channel) {
-                centerCol.append(
-                    $('<div class="iptv-item"></div>').text(safeText(channel.name) + (isFavorite(channel) ? ' ★' : ''))
-                );
+                centerCol.append($('<div class="iptv-item"></div>').text(safeText(channel.name) + (isFavorite(channel) ? ' ★' : '')));
             });
         }
 
@@ -481,6 +487,20 @@
             updateFocus();
         }
 
+        function keyboardKeys() {
+            return KEYBOARDS[keyboardLang];
+        }
+
+        function keyCount() {
+            return keyboardKeys().length + KEYBOARD_ACTIONS.length;
+        }
+
+        function keyToken(index) {
+            var keys = keyboardKeys();
+            if (index < keys.length) return { type: 'char', value: keys[index] };
+            return { type: 'action', value: KEYBOARD_ACTIONS[index - keys.length].code };
+        }
+
         function renderKeyboardOverlay() {
             overlayScreen.empty().removeClass('iptv-hidden');
 
@@ -488,25 +508,27 @@
             var main = $('<div class="iptv-overlay-main"></div>');
 
             panel.append($('<div class="iptv-head"></div>').text(keyboardMode === 'add' ? 'Добавить плейлист' : 'Поиск'));
-            panel.append($('<div class="iptv-item"></div>').text('OK по клавишам справа'));
-            panel.append($('<div class="iptv-item"></div>').text('Back: отмена'));
+            panel.append($('<div class="iptv-item"></div>').text('QWERTY клавиатура'));
             panel.append($('<div class="iptv-item"></div>').text('Menu: удалить символ'));
+            panel.append($('<div class="iptv-item"></div>').text('Back: отмена'));
 
-            main.append($('<div class="iptv-head"></div>').text(state.keyboardTitle));
+            var kbHead = $('<div class="iptv-kb-head"></div>');
+            kbHead.append($('<div class="iptv-head"></div>').text(state.keyboardTitle));
+            kbHead.append($('<div class="iptv-kb-lang"></div>').text(keyboardLang.toUpperCase()));
+            main.append(kbHead);
+
             main.append($('<div class="iptv-display"></div>').text(state.keyboardValue || ' '));
 
             var grid = $('<div class="iptv-keyboard"></div>');
-            KEYBOARD_ROWS.forEach(function (row) {
-                row.forEach(function (key) {
-                    grid.append($('<div class="iptv-key"></div>').text(key));
-                });
+            keyboardKeys().forEach(function (key) {
+                grid.append($('<div class="iptv-key"></div>').text(key));
             });
             main.append(grid);
 
             var actions = $('<div class="iptv-actions"></div>');
-            actions.append($('<div class="iptv-action-btn"></div>').text('Пробел'));
-            actions.append($('<div class="iptv-action-btn"></div>').text('Стереть'));
-            actions.append($('<div class="iptv-action-btn"></div>').text('Готово'));
+            KEYBOARD_ACTIONS.forEach(function (action) {
+                actions.append($('<div class="iptv-action-btn"></div>').text(action.title));
+            });
             main.append(actions);
 
             overlayScreen.append(panel, main);
@@ -515,7 +537,7 @@
 
         function renderOverlay() {
             if (view === 'playlists') renderPlaylistsOverlay();
-            else if (view === 'keyboard' || view === 'search') renderKeyboardOverlay();
+            else if (view === 'keyboard') renderKeyboardOverlay();
             else overlayScreen.addClass('iptv-hidden').empty();
         }
 
@@ -524,35 +546,18 @@
             renderOverlay();
         }
 
-        function getKeyCount() {
-            return KEYBOARD_ROWS.length * KEYBOARD_ROWS[0].length + 3;
-        }
-
-        function getKeyboardCellLabel(index) {
-            var perRow = KEYBOARD_ROWS[0].length;
-            var keyCells = KEYBOARD_ROWS.length * perRow;
-
-            if (index < keyCells) {
-                var row = Math.floor(index / perRow);
-                var col = index % perRow;
-                return KEYBOARD_ROWS[row][col];
-            }
-
-            if (index === keyCells) return ' ';
-            if (index === keyCells + 1) return '__backspace__';
-            return '__submit__';
-        }
-
-        function appendKeyboardChar(token) {
-            if (token === '__backspace__') {
-                if (state.keyboardValue.length) {
-                    state.keyboardValue = state.keyboardValue.slice(0, -1);
-                }
-            } else if (token === '__submit__') {
+        function applyKey(token) {
+            if (token.type === 'char') {
+                state.keyboardValue += token.value;
+            } else if (token.value === 'space') {
+                state.keyboardValue += ' ';
+            } else if (token.value === 'backspace') {
+                if (state.keyboardValue.length) state.keyboardValue = state.keyboardValue.slice(0, -1);
+            } else if (token.value === 'lang') {
+                keyboardLang = keyboardLang === 'en' ? 'ru' : 'en';
+            } else if (token.value === 'submit') {
                 submitKeyboard();
                 return;
-            } else {
-                state.keyboardValue += token;
             }
 
             renderOverlay();
@@ -581,42 +586,40 @@
                 return;
             }
 
-            if (keyboardMode === 'search') {
-                state.currentChannels = state.allChannels.filter(function (channel) {
-                    return channel.name.toLowerCase().indexOf(value.toLowerCase()) !== -1;
-                });
-                state.centerIndex = 0;
-                state.rightIndex = 0;
-                closeOverlay();
-                state.activeColumn = 'center';
-                renderBrowser();
-                if (!state.currentChannels.length) Lampa.Noty.show('Ничего не найдено');
-            }
+            state.currentChannels = state.allChannels.filter(function (channel) {
+                return channel.name.toLowerCase().indexOf(value.toLowerCase()) !== -1;
+            });
+            state.centerIndex = 0;
+            state.rightIndex = 0;
+            closeOverlay();
+            state.activeColumn = 'center';
+            renderBrowser();
+
+            if (!state.currentChannels.length) Lampa.Noty.show('Ничего не найдено');
         }
 
         function openAddOverlay() {
             view = 'keyboard';
             keyboardMode = 'add';
+            keyboardLang = 'en';
             state.keyboardTitle = 'Введите URL плейлиста';
             state.keyboardValue = 'http://';
-            state.overlayColumn = 'keys';
             state.overlayKeyIndex = 0;
             renderOverlay();
         }
 
         function openSearchOverlay() {
-            view = 'search';
+            view = 'keyboard';
             keyboardMode = 'search';
+            keyboardLang = 'ru';
             state.keyboardTitle = 'Поиск канала';
             state.keyboardValue = '';
-            state.overlayColumn = 'keys';
             state.overlayKeyIndex = 0;
             renderOverlay();
         }
 
         function openPlaylistsOverlay() {
             view = 'playlists';
-            state.overlayColumn = 'list';
             state.overlayListIndex = config.currentPlaylist;
             renderOverlay();
         }
@@ -666,6 +669,8 @@
                 return;
             }
 
+            playerWasOpened = true;
+
             try {
                 Lampa.Controller.toggle('');
             } catch (e) {}
@@ -687,12 +692,10 @@
                 return;
             }
 
-            if (item.type === 'group') {
-                state.lastGroup = item.group;
-                applyCurrentGroup();
-                state.activeColumn = 'center';
-                renderBrowser();
-            }
+            state.lastGroup = item.group;
+            applyCurrentGroup();
+            state.activeColumn = 'center';
+            renderBrowser();
         }
 
         function activateRightItem() {
@@ -706,77 +709,32 @@
             else if (item.action === 'remove_playlist') removeCurrentPlaylist();
         }
 
-        function updateFocus() {
-            if (!root) return;
+        function restoreControllerLater(delay) {
+            setTimeout(function () {
+                if (!root || !root.parent().length) return;
+                if (view !== 'browser') return;
 
-            leftCol.find('.iptv-item').removeClass('active');
-            centerCol.find('.iptv-item').removeClass('active');
-            rightCol.find('.iptv-item').removeClass('active');
-            overlayScreen.find('.iptv-item').removeClass('active');
-            overlayScreen.find('.iptv-key').removeClass('active');
-            overlayScreen.find('.iptv-action-btn').removeClass('active');
+                try {
+                    Lampa.Controller.remove(controller_name);
+                } catch (e) {}
 
-            if (view === 'browser') {
-                if (state.activeColumn === 'left') {
-                    leftCol.find('.iptv-item').eq(state.leftIndex).addClass('active');
-                } else if (state.activeColumn === 'center') {
-                    centerCol.find('.iptv-item').eq(state.centerIndex + 0).addClass('active');
-                } else if (state.activeColumn === 'right') {
-                    rightCol.find('.iptv-item').eq(state.rightIndex + 0).addClass('active');
-                }
-                return;
-            }
-
-            if (view === 'playlists') {
-                overlayScreen.find('.iptv-overlay-panel .iptv-item').eq(state.overlayListIndex).addClass('active');
-                return;
-            }
-
-            if (view === 'keyboard' || view === 'search') {
-                var keyCells = KEYBOARD_ROWS.length * KEYBOARD_ROWS[0].length;
-                if (state.overlayKeyIndex < keyCells) {
-                    overlayScreen.find('.iptv-key').eq(state.overlayKeyIndex).addClass('active');
-                } else {
-                    overlayScreen.find('.iptv-action-btn').eq(state.overlayKeyIndex - keyCells).addClass('active');
-                }
-            }
+                controllerReady = false;
+                addController();
+                activateController();
+                updateFocus();
+                playerWasOpened = false;
+            }, delay || 200);
         }
 
-        function bindPlayerReturn() {
-            if (Lampa.Listener && Lampa.Listener.follow) {
-                Lampa.Listener.follow('player', function () {
-                    if (!root || !root.parent().length) return;
-                    setTimeout(function () {
-                        try {
-                            Lampa.Controller.toggle(controller_name);
-                        } catch (e) {}
-                        updateFocus();
-                    }, 300);
-                });
-            }
+        function activateController() {
+            try {
+                Lampa.Controller.toggle(controller_name);
+            } catch (e) {}
         }
 
-        this.create = function () {
-            ensureStyles();
+        function addController() {
+            if (controllerReady) return;
 
-            root = $('<div class="iptv-root"></div>');
-            mainScreen = $('<div class="iptv-main"></div>');
-            overlayScreen = $('<div class="iptv-overlay iptv-hidden"></div>');
-
-            leftCol = $('<div class="iptv-col iptv-left"></div>');
-            centerCol = $('<div class="iptv-col iptv-center"></div>');
-            rightCol = $('<div class="iptv-col iptv-right"></div>');
-
-            mainScreen.append(leftCol, centerCol, rightCol);
-            root.append(mainScreen, overlayScreen);
-
-            bindPlayerReturn();
-            loadPlaylist();
-
-            return root;
-        };
-
-        this.start = function () {
             Lampa.Controller.add(controller_name, {
                 up: function () {
                     if (view === 'browser') {
@@ -787,9 +745,7 @@
                                 state.lastGroup = item.group;
                                 applyCurrentGroup();
                                 renderBrowser();
-                            } else {
-                                updateFocus();
-                            }
+                            } else updateFocus();
                         } else if (state.activeColumn === 'center' && state.centerIndex > 0) {
                             state.centerIndex--;
                             renderRight();
@@ -807,9 +763,8 @@
                         return;
                     }
 
-                    if (view === 'keyboard' || view === 'search') {
-                        var cols = KEYBOARD_ROWS[0].length;
-                        if (state.overlayKeyIndex >= cols) state.overlayKeyIndex -= cols;
+                    if (view === 'keyboard') {
+                        if (state.overlayKeyIndex >= 10) state.overlayKeyIndex -= 10;
                         updateFocus();
                     }
                 },
@@ -822,9 +777,7 @@
                                 state.lastGroup = item.group;
                                 applyCurrentGroup();
                                 renderBrowser();
-                            } else {
-                                updateFocus();
-                            }
+                            } else updateFocus();
                         } else if (state.activeColumn === 'center' && state.centerIndex < state.currentChannels.length - 1) {
                             state.centerIndex++;
                             renderRight();
@@ -842,10 +795,9 @@
                         return;
                     }
 
-                    if (view === 'keyboard' || view === 'search') {
-                        var cols = KEYBOARD_ROWS[0].length;
-                        var next = state.overlayKeyIndex + cols;
-                        if (next < getKeyCount()) state.overlayKeyIndex = next;
+                    if (view === 'keyboard') {
+                        var next = state.overlayKeyIndex + 10;
+                        if (next < keyCount()) state.overlayKeyIndex = next;
                         updateFocus();
                     }
                 },
@@ -858,7 +810,7 @@
                         return;
                     }
 
-                    if (view === 'keyboard' || view === 'search') {
+                    if (view === 'keyboard') {
                         if (state.overlayKeyIndex > 0) state.overlayKeyIndex--;
                         updateFocus();
                     }
@@ -867,11 +819,8 @@
                     if (view === 'browser') {
                         if (state.activeColumn === 'left') {
                             var item = selectedLeftItem();
-                            if (item && item.type === 'group') {
-                                state.activeColumn = 'center';
-                            } else {
-                                activateLeftItem();
-                            }
+                            if (item && item.type === 'group') state.activeColumn = 'center';
+                            else activateLeftItem();
                         } else if (state.activeColumn === 'center') {
                             if (state.currentChannels.length) state.activeColumn = 'right';
                         }
@@ -879,20 +828,18 @@
                         return;
                     }
 
-                    if (view === 'keyboard' || view === 'search') {
-                        if (state.overlayKeyIndex < getKeyCount() - 1) state.overlayKeyIndex++;
+                    if (view === 'keyboard') {
+                        if (state.overlayKeyIndex < keyCount() - 1) state.overlayKeyIndex++;
                         updateFocus();
                     }
                 },
                 enter: function () {
                     if (view === 'browser') {
-                        if (state.activeColumn === 'left') {
-                            activateLeftItem();
-                        } else if (state.activeColumn === 'center') {
+                        if (state.activeColumn === 'left') activateLeftItem();
+                        else if (state.activeColumn === 'center') {
                             if (state.currentChannels.length) state.activeColumn = 'right';
-                        } else if (state.activeColumn === 'right') {
-                            activateRightItem();
-                        }
+                        } else if (state.activeColumn === 'right') activateRightItem();
+
                         updateFocus();
                         return;
                     }
@@ -903,8 +850,8 @@
                         return;
                     }
 
-                    if (view === 'keyboard' || view === 'search') {
-                        appendKeyboardChar(getKeyboardCellLabel(state.overlayKeyIndex));
+                    if (view === 'keyboard') {
+                        applyKey(keyToken(state.overlayKeyIndex));
                     }
                 },
                 back: function () {
@@ -931,6 +878,7 @@
                     if (view === 'playlists') {
                         var pl = selectedPlaylistItem();
                         if (!pl) return;
+
                         var target = config.playlists[pl.index];
                         if (!target || target.locked || config.playlists.length <= 1) {
                             Lampa.Noty.show('Этот плейлист нельзя удалить');
@@ -949,7 +897,7 @@
                         return;
                     }
 
-                    if (view === 'keyboard' || view === 'search') {
+                    if (view === 'keyboard') {
                         if (state.keyboardValue.length) {
                             state.keyboardValue = state.keyboardValue.slice(0, -1);
                             renderOverlay();
@@ -962,21 +910,101 @@
                 }
             });
 
-            try {
-                Lampa.Controller.toggle(controller_name);
-            } catch (e) {}
+            controllerReady = true;
+        }
 
+        function updateFocus() {
+            if (!root) return;
+
+            leftCol.find('.iptv-item').removeClass('active');
+            centerCol.find('.iptv-item').removeClass('active');
+            rightCol.find('.iptv-item').removeClass('active');
+            overlayScreen.find('.iptv-item').removeClass('active');
+            overlayScreen.find('.iptv-key').removeClass('active');
+            overlayScreen.find('.iptv-action-btn').removeClass('active');
+
+            if (view === 'browser') {
+                if (state.activeColumn === 'left') {
+                    leftCol.find('.iptv-item').eq(state.leftIndex).addClass('active');
+                } else if (state.activeColumn === 'center') {
+                    centerCol.find('.iptv-item').eq(state.centerIndex).addClass('active');
+                } else if (state.activeColumn === 'right') {
+                    rightCol.find('.iptv-item').eq(state.rightIndex).addClass('active');
+                }
+                return;
+            }
+
+            if (view === 'playlists') {
+                overlayScreen.find('.iptv-overlay-panel .iptv-item').eq(state.overlayListIndex).addClass('active');
+                return;
+            }
+
+            if (view === 'keyboard') {
+                var keys = keyboardKeys();
+                if (state.overlayKeyIndex < keys.length) {
+                    overlayScreen.find('.iptv-key').eq(state.overlayKeyIndex).addClass('active');
+                } else {
+                    overlayScreen.find('.iptv-action-btn').eq(state.overlayKeyIndex - keys.length).addClass('active');
+                }
+            }
+        }
+
+        function bindPlayerReturn() {
+            if (Lampa.Listener && Lampa.Listener.follow) {
+                Lampa.Listener.follow('player', function () {
+                    if (!playerWasOpened) return;
+                    restoreControllerLater(350);
+                });
+
+                Lampa.Listener.follow('app', function (e) {
+                    if (!playerWasOpened) return;
+                    if (!e) return;
+
+                    if (e.type === 'visible' || e.type === 'focus' || e.type === 'resume') {
+                        restoreControllerLater(250);
+                    }
+                });
+            }
+        }
+
+        this.create = function () {
+            ensureStyles();
+
+            root = $('<div class="iptv-root"></div>');
+            mainScreen = $('<div class="iptv-main"></div>');
+            overlayScreen = $('<div class="iptv-overlay iptv-hidden"></div>');
+
+            leftCol = $('<div class="iptv-col iptv-left"></div>');
+            centerCol = $('<div class="iptv-col iptv-center"></div>');
+            rightCol = $('<div class="iptv-col iptv-right"></div>');
+
+            mainScreen.append(leftCol, centerCol, rightCol);
+            root.append(mainScreen, overlayScreen);
+
+            bindPlayerReturn();
+            loadPlaylist();
+
+            return root;
+        };
+
+        this.start = function () {
+            addController();
+            activateController();
             updateFocus();
         };
 
         this.pause = function () {};
         this.stop = function () {};
-        this.render = function () { return root; };
+
+        this.render = function () {
+            return root;
+        };
 
         this.destroy = function () {
             try {
                 Lampa.Controller.remove(controller_name);
             } catch (e) {}
+            controllerReady = false;
             if (root) root.remove();
         };
     }
