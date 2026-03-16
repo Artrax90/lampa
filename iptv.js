@@ -1,13 +1,13 @@
 // ==Lampa==
 // name: IPTV PRO TV Rebuild
-// version: 2.4.1
+// version: 2.4.2
 // ==/Lampa==
 
 (function () {
     'use strict';
 
     function IPTVTvComponent() {
-        var storage_key = 'iptv_tv_rebuild_v241';
+        var storage_key = 'iptv_tv_rebuild_v242';
         var controller_name = 'iptv_tv_rebuild';
         var root, mainScreen, overlayScreen, leftCol, centerCol, rightCol;
 
@@ -664,6 +664,16 @@
             } catch (e) {}
         }
 
+        function exitPlugin() {
+            try {
+                Lampa.Controller.toggle('menu');
+            } catch (e) {}
+
+            try {
+                Lampa.Activity.back();
+            } catch (e) {}
+        }
+
         function playSelectedChannel() {
             var channel = selectedChannel();
             var enabled = controller_name;
@@ -866,10 +876,19 @@
                 },
                 left: function () {
                     if (view === 'browser') {
-                        if (state.activeColumn === 'right') state.activeColumn = 'center';
-                        else if (state.activeColumn === 'center') state.activeColumn = 'left';
-                        else Lampa.Activity.back();
-                        updateFocus();
+                        if (state.activeColumn === 'right') {
+                            state.activeColumn = 'center';
+                            updateFocus();
+                            return;
+                        }
+
+                        if (state.activeColumn === 'center') {
+                            state.activeColumn = 'left';
+                            updateFocus();
+                            return;
+                        }
+
+                        exitPlugin();
                         return;
                     }
 
@@ -935,7 +954,7 @@
                         return;
                     }
 
-                    Lampa.Activity.back();
+                    exitPlugin();
                 },
                 menu: function () {
                     if (view === 'playlists') {
@@ -1003,10 +1022,7 @@
 
         this.pause = function () {};
         this.stop = function () {};
-
-        this.render = function () {
-            return root;
-        };
+        this.render = function () { return root; };
 
         this.destroy = function () {
             try {
