@@ -1,13 +1,13 @@
 // ==Lampa==
 // name: IPTV PRO TV Rebuild
-// version: 2.4.0
+// version: 2.4.1
 // ==/Lampa==
 
 (function () {
     'use strict';
 
     function IPTVTvComponent() {
-        var storage_key = 'iptv_tv_rebuild_v240';
+        var storage_key = 'iptv_tv_rebuild_v241';
         var controller_name = 'iptv_tv_rebuild';
         var root, mainScreen, overlayScreen, leftCol, centerCol, rightCol;
 
@@ -664,16 +664,10 @@
             } catch (e) {}
         }
 
-        function restoreAfterPlayer() {
-            setTimeout(function () {
-                activateController();
-                updateFocus();
-            }, 50);
-        }
-
         function playSelectedChannel() {
             var channel = selectedChannel();
             var enabled = controller_name;
+            var video;
 
             if (!channel || !channel.url) {
                 Lampa.Noty.show('Канал не выбран');
@@ -681,24 +675,21 @@
             }
 
             try {
-                if (Lampa.Controller.enabled() && Lampa.Controller.enabled().name) {
+                if (Lampa.Controller.enabled && Lampa.Controller.enabled() && Lampa.Controller.enabled().name) {
                     enabled = Lampa.Controller.enabled().name;
                 }
             } catch (e) {}
 
-            var video = {
+            video = {
                 title: channel.name,
                 url: channel.url
             };
 
-            if (typeof Lampa.Player.iptv === 'function') {
-                Lampa.Player.iptv(video);
-            }
-
-            if (typeof Lampa.Player.playlist === 'function') {
-                Lampa.Player.playlist([video]);
-            } else {
+            try {
                 Lampa.Player.play(video);
+            } catch (e) {
+                Lampa.Noty.show('Ошибка запуска плеера');
+                return;
             }
 
             if (typeof Lampa.Player.callback === 'function') {
@@ -708,7 +699,11 @@
                     } catch (e) {
                         activateController();
                     }
-                    restoreAfterPlayer();
+
+                    setTimeout(function () {
+                        activateController();
+                        updateFocus();
+                    }, 50);
                 });
             }
         }
