@@ -1,13 +1,13 @@
 // ==Lampa==
 // name: IPTV PRO Universal
-// version: 4.0.6
+// version: 4.0.7
 // ==/Lampa==
 
 (function () {
     'use strict';
 
     function IPTVUniversal() {
-        var storage_key = 'iptv_universal_v406';
+        var storage_key = 'iptv_universal_v407';
         var controller_name = 'iptv_universal';
 
         var root;
@@ -18,8 +18,8 @@
         var overlay;
         var mobileTabs;
 
-        var view = 'browser'; // browser | playlists | keyboard
-        var keyboardMode = 'add'; // add | search
+        var view = 'browser';
+        var keyboardMode = 'add';
         var keyboardLang = 'en';
         var controllerReady = false;
 
@@ -38,15 +38,27 @@
             'bridge classic': { epg: 'bridge-classic' },
             'bridge tv classic': { epg: 'bridge-classic' },
 
-            'первый канал': { epg: 'perviy-kanal' },
-            'первый канал hd': { epg: 'perviy-kanal' },
-            'первый канал европа': { epg: 'perviy-kanal' },
-            'первый канал +4': { epg: 'perviy-kanal' },
-            'первый': { epg: 'perviy-kanal' },
+            'первый канал': { epg: 'pervy' },
+            'первый канал hd': { epg: 'pervy' },
+            'первый hd': { epg: 'pervy' },
+            'первый канал европа': { epg: 'pervy' },
+            'первый канал +1': { epg: 'pervy-pl1' },
+            'первый канал +4': { epg: 'pervy-pl4' },
+            'первый канал +6': { epg: 'pervy-pl6' },
+            'первый канал (+1)': { epg: 'pervy-pl1' },
+            'первый канал (+4)': { epg: 'pervy-pl4' },
+            'первый канал (+6)': { epg: 'pervy-pl6' },
+            'первый': { epg: 'pervy' },
 
-            'россия 1': { epg: 'rossiya-1' },
-            'россия 1 hd': { epg: 'rossiya-1' },
-            'россия1': { epg: 'rossiya-1' },
+            'россия 1': { epg: 'rossia1' },
+            'россия 1 hd': { epg: 'rossia1' },
+            'россия1': { epg: 'rossia1' },
+            'россия 1 +1': { epg: 'rossia1-pl1' },
+            'россия 1 +2': { epg: 'rossia1-pl2' },
+            'россия 1 +4': { epg: 'rossia1-pl4' },
+            'россия 1 (+1)': { epg: 'rossia1-pl1' },
+            'россия 1 (+2)': { epg: 'rossia1-pl2' },
+            'россия 1 (+4)': { epg: 'rossia1-pl4' },
 
             'rtr planeta': { epg: 'rtr-planeta' },
             'ртр планета': { epg: 'rtr-planeta' },
@@ -62,8 +74,8 @@
             'первый российский национальный канал hd': { epg: 'prnk-tv' },
 
             'матч': { epg: 'match-tv' },
-            'матч тв': { epg: 'match-tv' },
             'матч!': { epg: 'match-tv' },
+            'матч тв': { epg: 'match-tv' },
             'match tv': { epg: 'match-tv' },
 
             'нтв': { epg: 'ntv' },
@@ -83,34 +95,42 @@
 
             'отр': { epg: 'otr' },
 
-            'твц': { epg: 'tvc' },
-            'тв центр': { epg: 'tvc' },
-            'тв центр hd': { epg: 'tvc' },
+            'твц': { epg: 'tvcentr' },
+            'тв центр': { epg: 'tvcentr' },
+            'тв центр hd': { epg: 'tvcentr' },
 
-            'рен тв': { epg: 'ren-tv' },
-            'рен тв hd': { epg: 'ren-tv' },
-            'рентв': { epg: 'ren-tv' },
-            'rentv': { epg: 'ren-tv' },
-            'ren tv': { epg: 'ren-tv' },
-            'рен тв international': { epg: 'ren-tv' },
+            'рен тв': { epg: 'rentv' },
+            'рен тв hd': { epg: 'rentv' },
+            'рентв': { epg: 'rentv' },
+            'rentv': { epg: 'rentv' },
+            'ren tv': { epg: 'rentv' },
+            'рен тв international': { epg: 'rentv' },
 
             'стс': { epg: 'sts' },
             'стс hd': { epg: 'sts' },
             'стс international': { epg: 'sts' },
+            'стс +2': { epg: 'sts-pl2' },
+            'стс +4': { epg: 'sts-pl4' },
+            'стс +7': { epg: 'sts-pl7' },
+            'стс (+2)': { epg: 'sts-pl2' },
+            'стс (+4)': { epg: 'sts-pl4' },
+            'стс (+7)': { epg: 'sts-pl7' },
 
-            'домашний': { epg: 'domashniy' },
-            'домашний hd': { epg: 'domashniy' },
+            'домашний': { epg: 'domashny' },
+            'домашний hd': { epg: 'domashny' },
 
-            'тв3': { epg: 'tv-3' },
-            'тв 3': { epg: 'tv-3' },
-            'tv 3': { epg: 'tv-3' },
-            'тв3 hd': { epg: 'tv-3' },
+            'тв3': { epg: 'tv3-ru' },
+            'тв 3': { epg: 'tv3-ru' },
+            'тв-3': { epg: 'tv3-ru' },
+            'tv 3': { epg: 'tv3-ru' },
+            'tv-3': { epg: 'tv3-ru' },
+            'тв3 hd': { epg: 'tv3-ru' },
 
-            'пятница': { epg: 'pyatnica' },
-            'пятница!': { epg: 'pyatnica' },
-            'пятница hd': { epg: 'pyatnica' },
-            'пятница! hd': { epg: 'pyatnica' },
-            'пятница international': { epg: 'pyatnica' },
+            'пятница': { epg: 'piatnica' },
+            'пятница!': { epg: 'piatnica' },
+            'пятница hd': { epg: 'piatnica' },
+            'пятница! hd': { epg: 'piatnica' },
+            'пятница international': { epg: 'piatnica' },
 
             'звезда': { epg: 'zvezda' },
             'звезда hd': { epg: 'zvezda' },
@@ -124,23 +144,24 @@
             'тнт': { epg: 'tnt' },
             'тнт hd': { epg: 'tnt' },
             'тнт international': { epg: 'tnt' },
-            'тнт international снг': { epg: 'tnt' },
+            'тнт international снг': { epg: 'tnt-int-cis' },
+            'тнт-international снг': { epg: 'tnt-int-cis' },
 
-            'муз тв': { epg: 'muz-tv' },
-            'муз тв hd': { epg: 'muz-tv' },
-            'muz tv': { epg: 'muz-tv' },
+            'муз тв': { epg: 'muztv' },
+            'муз-тв': { epg: 'muztv' },
+            'муз тв hd': { epg: 'muztv' },
+            'муз-тв hd': { epg: 'muztv' },
+            'muz tv': { epg: 'muztv' },
 
-            'новости 360': { epg: '360-novosti' },
             '360 новости': { epg: '360-novosti' },
             '360 новости hd': { epg: '360-novosti' },
 
             'rtvi': { epg: 'rtvi' },
             'рбк': { epg: 'rbk' },
             'рбк hd': { epg: 'rbk' },
-            'россия 24': { epg: 'rossiya-24' },
+            'россия 24': { epg: 'rossia-24' },
             'обком': { epg: 'obkom' },
 
-            'муз tv': { epg: 'muz-tv' },
             'record russian hits': { epg: 'record-russian-hits' },
             'record супердискотека 90х': { epg: 'record-superdiskoteka-90x' },
             'record trance': { epg: 'record-trance' },
@@ -171,7 +192,12 @@
             lastGroup: config.lastGroup || 'STAR_FAVORITES',
             mobileTab: 'left',
             playlistEpgUrl: '',
-            epgLoaded: false
+            epgLoaded: false,
+            epgStatus: {
+                state: 'idle',
+                url: '',
+                message: 'EPG не загружен'
+            }
         };
 
         var epg = {
@@ -183,6 +209,10 @@
         };
 
         var DEFAULT_EPG_URL = 'https://iptvx.one/EPG_LITE';
+        var FALLBACK_EPG_URLS = [
+            'https://iptvx.one/EPG_NOARCH',
+            'https://iptvx.one/EPG'
+        ];
 
         var KEYBOARDS = {
             en: [
@@ -486,7 +516,7 @@
             var meta = getManualChannelMeta(channel);
             if (!meta) return channel;
 
-            if (!channel.id && meta.epg) channel.id = meta.epg;
+            if ((!channel.id || channel.id === 'no_tvg') && meta.epg) channel.id = meta.epg;
             if (!channel.logo && meta.logo) channel.logo = meta.logo;
 
             return channel;
@@ -520,6 +550,42 @@
             }
 
             return '';
+        }
+
+        function epgStatusText() {
+            if (state.epgStatus.state === 'loaded') {
+                return 'EPG: загружен';
+            }
+            if (state.epgStatus.state === 'loaded_empty') {
+                return 'EPG: файл пустой';
+            }
+            if (state.epgStatus.state === 'error') {
+                return 'EPG: ошибка загрузки';
+            }
+            if (state.epgStatus.state === 'loading') {
+                return 'EPG: загрузка...';
+            }
+            return 'EPG: не загружен';
+        }
+
+        function epgCandidates() {
+            var list = [];
+            var seen = {};
+
+            function push(url) {
+                if (!url || seen[url]) return;
+                seen[url] = true;
+                list.push(url);
+            }
+
+            push(state.playlistEpgUrl);
+            push(DEFAULT_EPG_URL);
+
+            FALLBACK_EPG_URLS.forEach(function (url) {
+                push(url);
+            });
+
+            return list;
         }
 
         function ensureStyles() {
@@ -735,20 +801,56 @@
             epg.iconById = {};
             epg.iconByName = {};
             state.epgLoaded = false;
+            state.epgStatus = {
+                state: 'idle',
+                url: '',
+                message: 'EPG не загружен'
+            };
         }
 
         function loadEpg() {
-            var url = state.playlistEpgUrl || DEFAULT_EPG_URL;
-            if (!url) return;
+            var urls = epgCandidates();
 
-            if (epg.url === url && state.epgLoaded) {
+            if (!urls.length) return;
+
+            state.epgStatus = {
+                state: 'loading',
+                url: '',
+                message: 'Загрузка EPG...'
+            };
+            renderRight();
+            renderCenter();
+            updateFocus();
+
+            tryLoadEpg(urls, 0);
+        }
+
+        function tryLoadEpg(urls, index) {
+            if (index >= urls.length) {
+                state.epgStatus = {
+                    state: 'error',
+                    url: '',
+                    message: 'Не удалось загрузить ни один EPG источник'
+                };
                 renderRight();
                 renderCenter();
                 updateFocus();
                 return;
             }
 
-            resetEpg();
+            var url = urls[index];
+
+            if (epg.url === url && state.epgLoaded) {
+                state.epgStatus = {
+                    state: 'loaded',
+                    url: url,
+                    message: 'EPG загружен'
+                };
+                renderRight();
+                renderCenter();
+                updateFocus();
+                return;
+            }
 
             $.ajax({
                 url: url,
@@ -757,25 +859,60 @@
                 timeout: 25000,
                 success: function (xmlText) {
                     runSafe('parseEpg', function () {
-                        parseEpg(xmlText || '', url);
-                        renderRight();
-                        renderCenter();
-                        updateFocus();
+                        var parsed = parseEpg(xmlText || '', url);
+
+                        if (parsed) {
+                            renderRight();
+                            renderCenter();
+                            updateFocus();
+                        } else {
+                            tryLoadEpg(urls, index + 1);
+                        }
                     });
                 },
                 error: function () {
-                    logError('loadEpg', 'EPG ajax error');
+                    logError('loadEpg', 'EPG ajax error: ' + url);
+                    tryLoadEpg(urls, index + 1);
                 }
             });
         }
 
         function parseEpg(xmlText, url) {
-            var parser = new DOMParser();
-            var xml = parser.parseFromString(xmlText, 'text/xml');
-            var channels = xml.getElementsByTagName('channel');
-            var programmes = xml.getElementsByTagName('programme');
-            var now = new Date().getTime();
+            var parser;
+            var xml;
+            var channels;
+            var programmes;
+            var now;
             var i;
+            var totalPrograms = 0;
+            var idsCount = 0;
+
+            if (!xmlText) return false;
+
+            parser = new DOMParser();
+            xml = parser.parseFromString(xmlText, 'text/xml');
+
+            if (!xml || xml.getElementsByTagName('parsererror').length) {
+                state.epgStatus = {
+                    state: 'error',
+                    url: url,
+                    message: 'Ошибка парсинга XMLTV'
+                };
+                return false;
+            }
+
+            channels = xml.getElementsByTagName('channel');
+            programmes = xml.getElementsByTagName('programme');
+            now = new Date().getTime();
+
+            if (!channels.length && !programmes.length) {
+                state.epgStatus = {
+                    state: 'loaded_empty',
+                    url: url,
+                    message: 'EPG источник пустой'
+                };
+                return false;
+            }
 
             epg.url = url;
             epg.programsById = {};
@@ -791,6 +928,7 @@
                 var icon = iconNode ? safeText(iconNode.getAttribute('src') || '').trim() : '';
                 var n;
 
+                if (id) idsCount++;
                 if (id && icon) epg.iconById[id] = icon;
 
                 for (n = 0; n < names.length; n++) {
@@ -820,6 +958,7 @@
                     start: start,
                     stop: stop
                 });
+                totalPrograms++;
             }
 
             Object.keys(epg.programsById).forEach(function (id) {
@@ -830,6 +969,13 @@
             });
 
             state.epgLoaded = true;
+            state.epgStatus = {
+                state: totalPrograms ? 'loaded' : 'loaded_empty',
+                url: url,
+                message: totalPrograms ? ('EPG загружен: ' + idsCount + ' каналов, ' + totalPrograms + ' передач') : 'EPG без передач'
+            };
+
+            return !!totalPrograms;
         }
 
         function loadPlaylist() {
@@ -1041,6 +1187,10 @@
 
             rightCol.append($('<div class="iptv-title"></div>').text(channel.name));
             rightCol.append($('<div class="iptv-meta"></div>').text('Группа: ' + channel.group));
+            rightCol.append($('<div class="iptv-meta"></div>').text(epgStatusText()));
+            if (state.epgStatus.url) {
+                rightCol.append($('<div class="iptv-meta"></div>').text('Источник: ' + state.epgStatus.url));
+            }
 
             epgBox = $('<div class="iptv-epg"></div>');
             if (epgMatch && epgMatch.length) {
