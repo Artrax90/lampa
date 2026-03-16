@@ -1,13 +1,13 @@
 // ==Lampa==
 // name: IPTV PRO Universal
-// version: 4.0.1
+// version: 4.0.2
 // ==/Lampa==
 
 (function () {
     'use strict';
 
     function IPTVUniversal() {
-        var storage_key = 'iptv_universal_v401';
+        var storage_key = 'iptv_universal_v402';
         var controller_name = 'iptv_universal';
 
         var root;
@@ -294,6 +294,47 @@
             return new Date(year, month, day, hour, minute, second);
         }
 
+        function selectedLeftItem() {
+            return state.leftItems[state.leftIndex] || null;
+        }
+
+        function selectedChannel() {
+            if (!state.currentChannels.length) return null;
+
+            if (state.centerIndex < 0) state.centerIndex = 0;
+            if (state.centerIndex >= state.currentChannels.length) {
+                state.centerIndex = state.currentChannels.length - 1;
+            }
+
+            return state.currentChannels[state.centerIndex] || null;
+        }
+
+        function selectedRightItem() {
+            return state.rightItems[state.rightIndex] || null;
+        }
+
+        function selectedPlaylistItem() {
+            return state.playlistItems[state.overlayIndex] || null;
+        }
+
+        function keyboardKeys() {
+            return KEYBOARDS[keyboardLang];
+        }
+
+        function keyCount() {
+            return keyboardKeys().length + KEYBOARD_ACTIONS.length;
+        }
+
+        function isFavorite(channel) {
+            if (!channel || !channel.url) return false;
+
+            for (var i = 0; i < config.favorites.length; i++) {
+                if (config.favorites[i].url === channel.url) return true;
+            }
+
+            return false;
+        }
+
         function ensureStyles() {
             if ($('#iptv-universal-style').length) return;
 
@@ -375,26 +416,6 @@
             return name === 'STAR_FAVORITES' ? '⭐ Избранное' : name;
         }
 
-        function buildLeftItems() {
-            var items = [
-                { type: 'action', title: 'Добавить плейлист', action: 'add' },
-                { type: 'action', title: 'Список плейлистов', action: 'playlists' },
-                { type: 'action', title: 'Поиск', action: 'search' }
-            ];
-
-            Object.keys(state.groups).forEach(function (group) {
-                items.push({
-                    type: 'group',
-                    title: displayGroupName(group),
-                    group: group,
-                    count: (state.groups[group] || []).length
-                });
-            });
-
-            state.leftItems = items;
-            if (state.leftIndex >= state.leftItems.length) state.leftIndex = 0;
-        }
-
         function getMatchedEpg(channel) {
             var id;
             var byNameId;
@@ -414,6 +435,26 @@
             if (byNameId && epg.programsById[byNameId]) return epg.programsById[byNameId];
 
             return null;
+        }
+
+        function buildLeftItems() {
+            var items = [
+                { type: 'action', title: 'Добавить плейлист', action: 'add' },
+                { type: 'action', title: 'Список плейлистов', action: 'playlists' },
+                { type: 'action', title: 'Поиск', action: 'search' }
+            ];
+
+            Object.keys(state.groups).forEach(function (group) {
+                items.push({
+                    type: 'group',
+                    title: displayGroupName(group),
+                    group: group,
+                    count: (state.groups[group] || []).length
+                });
+            });
+
+            state.leftItems = items;
+            if (state.leftIndex >= state.leftItems.length) state.leftIndex = 0;
         }
 
         function buildRightItems() {
@@ -1023,6 +1064,41 @@
             }
 
             renderOverlay();
+        }
+
+        function toggleFavorite(channel) {
+            if (!channel || !channel.url) return;
+
+            var found = -1;
+            var i;
+
+            for (i = 0; i < config.favorites.length; i++) {
+                if (config.favorites[i].url === channel.url) {
+                    found = i;
+                    break;
+                }
+            }
+
+            if (found >= 0) {
+                config.favorites.splice(found, 1);
+                notify('Удалено из избранного');
+            } else {
+                config.favorites.push({
+                    name: channel.name,
+                    url: channel.url,
+                    group: channel.group || 'ОБЩИЕ',
+                    logo: channel.logo || '',
+                    id: channel.id || '',
+                    epgName: channel.epgName || ''
+                });
+                notify('Добавлено в избранное');
+            }
+
+            saveConfig();
+            rebuildGroups();
+            buildLeftItems();
+            syncGroupSelection();
+            renderBrowser();
         }
 
         function removeCurrentPlaylist() {
