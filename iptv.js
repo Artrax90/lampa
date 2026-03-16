@@ -1,13 +1,13 @@
 // ==Lampa==
 // name: IPTV PRO Universal
-// version: 4.0.2
+// version: 4.0.3
 // ==/Lampa==
 
 (function () {
     'use strict';
 
     function IPTVUniversal() {
-        var storage_key = 'iptv_universal_v402';
+        var storage_key = 'iptv_universal_v403';
         var controller_name = 'iptv_universal';
 
         var root;
@@ -52,7 +52,9 @@
         var epg = {
             url: '',
             programsById: {},
-            namesMap: {}
+            namesMap: {},
+            iconById: {},
+            iconByName: {}
         };
 
         var DEFAULT_EPG_URL = 'https://iptvx.one/EPG_LITE';
@@ -250,8 +252,20 @@
             return (hh < 10 ? '0' : '') + hh + ':' + (mm < 10 ? '0' : '') + mm;
         }
 
+        function cleanupChannelName(value) {
+            return safeText(value)
+                .replace(/\([^)]*\)/g, ' ')
+                .replace(/\[[^\]]*\]/g, ' ')
+                .replace(/\b(uhd|fhd|hd|sd|4k)\b/gi, ' ')
+                .replace(/\+\s*\d+\b/g, ' ')
+                .replace(/\b\d+\+\b/g, ' ')
+                .replace(/[._-]+/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+        }
+
         function normalizeName(value) {
-            return safeText(value).toLowerCase().replace(/\s+/g, ' ').trim();
+            return cleanupChannelName(value).toLowerCase();
         }
 
         function decodeHtml(value) {
@@ -333,6 +347,33 @@
             }
 
             return false;
+        }
+
+        function resolveChannelLogo(channel) {
+            var names;
+            var i;
+            var nameKey;
+            var idKey;
+
+            if (!channel) return '';
+
+            if (channel.logo) return channel.logo;
+
+            idKey = channel.id || '';
+            if (idKey && epg.iconById[idKey]) return epg.iconById[idKey];
+
+            names = [
+                channel.epgName,
+                channel.name,
+                cleanupChannelName(channel.name)
+            ];
+
+            for (i = 0; i < names.length; i++) {
+                nameKey = normalizeName(names[i]);
+                if (nameKey && epg.iconByName[nameKey]) return epg.iconByName[nameKey];
+            }
+
+            return '';
         }
 
         function ensureStyles() {
@@ -419,6 +460,8 @@
         function getMatchedEpg(channel) {
             var id;
             var byNameId;
+            var names;
+            var i;
             var key;
 
             if (!channel) return null;
@@ -426,13 +469,17 @@
             id = channel.id || '';
             if (id && epg.programsById[id]) return epg.programsById[id];
 
-            key = normalizeName(channel.epgName || channel.name);
-            byNameId = epg.namesMap[key];
-            if (byNameId && epg.programsById[byNameId]) return epg.programsById[byNameId];
+            names = [
+                channel.epgName,
+                channel.name,
+                cleanupChannelName(channel.name)
+            ];
 
-            key = normalizeName(channel.name);
-            byNameId = epg.namesMap[key];
-            if (byNameId && epg.programsById[byNameId]) return epg.programsById[byNameId];
+            for (i = 0; i < names.length; i++) {
+                key = normalizeName(names[i]);
+                byNameId = epg.namesMap[key];
+                if (byNameId && epg.programsById[byNameId]) return epg.programsById[byNameId];
+            }
 
             return null;
         }
@@ -532,6 +579,8 @@
             epg.url = '';
             epg.programsById = {};
             epg.namesMap = {};
+            epg.iconById = {};
+            epg.iconByName = {};
             state.epgLoaded = false;
         }
 
@@ -541,6 +590,7 @@
 
             if (epg.url === url && state.epgLoaded) {
                 renderRight();
+                renderCenter();
                 updateFocus();
                 return;
             }
@@ -577,16 +627,25 @@
             epg.url = url;
             epg.programsById = {};
             epg.namesMap = {};
+            epg.iconById = {};
+            epg.iconByName = {};
 
             for (i = 0; i < channels.length; i++) {
                 var channelNode = channels[i];
                 var id = channelNode.getAttribute('id') || '';
                 var names = channelNode.getElementsByTagName('display-name');
+                var iconNode = channelNode.getElementsByTagName('icon')[0];
+                var icon = iconNode ? safeText(iconNode.getAttribute('src') || '').trim() : '';
                 var n;
 
+                if (id && icon) epg.iconById[id] = icon;
+
                 for (n = 0; n < names.length; n++) {
-                    var name = normalizeName(names[n].textContent || '');
-                    if (name && !epg.namesMap[name]) epg.namesMap[name] = id;
+                    var rawName = safeText(names[n].textContent || '').trim();
+                    var normName = normalizeName(rawName);
+
+                    if (normName && !epg.namesMap[normName]) epg.namesMap[normName] = id;
+                    if (normName && icon && !epg.iconByName[normName]) epg.iconByName[normName] = icon;
                 }
             }
 
@@ -614,7 +673,7 @@
                 epg.programsById[id].sort(function (a, b) {
                     return a.start.getTime() - b.start.getTime();
                 });
-                if (epg.programsById[id].length > 4) epg.programsById[id] = epg.programsById[id].slice(0, 4);
+                if (epg.programsById[id].length > 6) epg.programsById[id] = epg.programsById[id].slice(0, 6);
             });
 
             state.epgLoaded = true;
@@ -737,8 +796,9 @@
 
         function appendChannelRow(container, channel, subtitle) {
             var row = $('<div class="iptv-row"></div>');
+            var logo = resolveChannelLogo(channel);
 
-            if (channel.logo) row.append($('<img class="iptv-logo" alt="">').attr('src', channel.logo));
+            if (logo) row.append($('<img class="iptv-logo" alt="">').attr('src', logo));
             else row.append($('<div class="iptv-logo"></div>'));
 
             var text = $('<div class="iptv-row-text"></div>');
@@ -789,7 +849,9 @@
                 var subtitle = '';
                 var row = $('<div class="iptv-item"></div>');
 
-                if (epgMatch && epgMatch.length) subtitle = formatTime(epgMatch[0].start) + ' ' + epgMatch[0].title;
+                if (epgMatch && epgMatch.length) {
+                    subtitle = formatTime(epgMatch[0].start) + ' ' + epgMatch[0].title;
+                }
 
                 appendChannelRow(row, channel, subtitle);
 
@@ -814,13 +876,15 @@
             var channel = selectedChannel();
             var epgMatch = getMatchedEpg(channel);
             var epgBox;
+            var logo;
 
             if (!channel) {
                 rightCol.append($('<div class="iptv-empty"></div>').text('Выберите канал'));
                 return;
             }
 
-            if (channel.logo) rightCol.append($('<img class="iptv-logo iptv-logo--big" alt="">').attr('src', channel.logo));
+            logo = resolveChannelLogo(channel);
+            if (logo) rightCol.append($('<img class="iptv-logo iptv-logo--big" alt="">').attr('src', logo));
 
             rightCol.append($('<div class="iptv-title"></div>').text(channel.name));
             rightCol.append($('<div class="iptv-meta"></div>').text('Группа: ' + channel.group));
@@ -1087,7 +1151,7 @@
                     name: channel.name,
                     url: channel.url,
                     group: channel.group || 'ОБЩИЕ',
-                    logo: channel.logo || '',
+                    logo: resolveChannelLogo(channel) || '',
                     id: channel.id || '',
                     epgName: channel.epgName || ''
                 });
