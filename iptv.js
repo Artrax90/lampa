@@ -1,23 +1,25 @@
 // ==Lampa==
 // name: IPTV PRO TV Rebuild
-// version: 2.1.0
+// version: 2.1.1
 // ==/Lampa==
 
 (function () {
     'use strict';
 
     function IPTVTvComponent() {
-        var _this = this;
-
-        var storage_key = 'iptv_tv_rebuild_v21';
+        var storage_key = 'iptv_tv_rebuild_v211';
         var controller_name = 'iptv_tv_rebuild';
         var root, mainScreen, overlayScreen, leftCol, centerCol, rightCol;
 
         var view = 'browser'; // browser | playlists | keyboard
         var keyboardMode = 'add'; // add | search
         var keyboardLang = 'en';
+
         var playerWasOpened = false;
         var controllerReady = false;
+        var restoreTimer = 0;
+        var restoreAttempts = 0;
+        var maxRestoreAttempts = 12;
 
         var config = loadConfig();
 
@@ -661,6 +663,19 @@
             loadPlaylist();
         }
 
+        function clearRestoreTimer() {
+            if (restoreTimer) {
+                clearTimeout(restoreTimer);
+                restoreTimer = 0;
+            }
+        }
+
+        function activateController() {
+            try {
+                Lampa.Controller.toggle(controller_name);
+            } catch (e) {}
+        }
+
         function playSelectedChannel() {
             var channel = selectedChannel();
 
@@ -670,6 +685,8 @@
             }
 
             playerWasOpened = true;
+            restoreAttempts = 0;
+            clearRestoreTimer();
 
             try {
                 Lampa.Controller.toggle('');
@@ -709,27 +726,40 @@
             else if (item.action === 'remove_playlist') removeCurrentPlaylist();
         }
 
-        function restoreControllerLater(delay) {
-            setTimeout(function () {
-                if (!root || !root.parent().length) return;
-                if (view !== 'browser') return;
+        function updateFocus() {
+            if (!root) return;
 
-                try {
-                    Lampa.Controller.remove(controller_name);
-                } catch (e) {}
+            leftCol.find('.iptv-item').removeClass('active');
+            centerCol.find('.iptv-item').removeClass('active');
+            rightCol.find('.iptv-item').removeClass('active');
+            overlayScreen.find('.iptv-item').removeClass('active');
+            overlayScreen.find('.iptv-key').removeClass('active');
+            overlayScreen.find('.iptv-action-btn').removeClass('active');
 
-                controllerReady = false;
-                addController();
-                activateController();
-                updateFocus();
-                playerWasOpened = false;
-            }, delay || 200);
-        }
+            if (view === 'browser') {
+                if (state.activeColumn === 'left') {
+                    leftCol.find('.iptv-item').eq(state.leftIndex).addClass('active');
+                } else if (state.activeColumn === 'center') {
+                    centerCol.find('.iptv-item').eq(state.centerIndex).addClass('active');
+                } else if (state.activeColumn === 'right') {
+                    rightCol.find('.iptv-item').eq(state.rightIndex).addClass('active');
+                }
+                return;
+            }
 
-        function activateController() {
-            try {
-                Lampa.Controller.toggle(controller_name);
-            } catch (e) {}
+            if (view === 'playlists') {
+                overlayScreen.find('.iptv-overlay-panel .iptv-item').eq(state.overlayListIndex).addClass('active');
+                return;
+            }
+
+            if (view === 'keyboard') {
+                var keys = keyboardKeys();
+                if (state.overlayKeyIndex < keys.length) {
+                    overlayScreen.find('.iptv-key').eq(state.overlayKeyIndex).addClass('active');
+                } else {
+                    overlayScreen.find('.iptv-action-btn').eq(state.overlayKeyIndex - keys.length).addClass('active');
+                }
+            }
         }
 
         function addController() {
@@ -913,55 +943,48 @@
             controllerReady = true;
         }
 
-        function updateFocus() {
-            if (!root) return;
+        function rebuildController() {
+            try {
+                Lampa.Controller.remove(controller_name);
+            } catch (e) {}
 
-            leftCol.find('.iptv-item').removeClass('active');
-            centerCol.find('.iptv-item').removeClass('active');
-            rightCol.find('.iptv-item').removeClass('active');
-            overlayScreen.find('.iptv-item').removeClass('active');
-            overlayScreen.find('.iptv-key').removeClass('active');
-            overlayScreen.find('.iptv-action-btn').removeClass('active');
+            controllerReady = false;
+            addController();
+            activateController();
+            updateFocus();
+        }
 
-            if (view === 'browser') {
-                if (state.activeColumn === 'left') {
-                    leftCol.find('.iptv-item').eq(state.leftIndex).addClass('active');
-                } else if (state.activeColumn === 'center') {
-                    centerCol.find('.iptv-item').eq(state.centerIndex).addClass('active');
-                } else if (state.activeColumn === 'right') {
-                    rightCol.find('.iptv-item').eq(state.rightIndex).addClass('active');
-                }
-                return;
-            }
+        function scheduleControllerRestore() {
+            if (!playerWasOpened) return;
 
-            if (view === 'playlists') {
-                overlayScreen.find('.iptv-overlay-panel .iptv-item').eq(state.overlayListIndex).addClass('active');
-                return;
-            }
+            clearRestoreTimer();
 
-            if (view === 'keyboard') {
-                var keys = keyboardKeys();
-                if (state.overlayKeyIndex < keys.length) {
-                    overlayScreen.find('.iptv-key').eq(state.overlayKeyIndex).addClass('active');
+            restoreTimer = setTimeout(function () {
+                if (!root || !root.parent().length) return;
+
+                restoreAttempts++;
+                rebuildController();
+
+                if (restoreAttempts < maxRestoreAttempts && playerWasOpened) {
+                    scheduleControllerRestore();
                 } else {
-                    overlayScreen.find('.iptv-action-btn').eq(state.overlayKeyIndex - keys.length).addClass('active');
+                    playerWasOpened = false;
+                    restoreAttempts = 0;
                 }
-            }
+            }, 350);
         }
 
         function bindPlayerReturn() {
             if (Lampa.Listener && Lampa.Listener.follow) {
                 Lampa.Listener.follow('player', function () {
-                    if (!playerWasOpened) return;
-                    restoreControllerLater(350);
+                    if (playerWasOpened) scheduleControllerRestore();
                 });
 
                 Lampa.Listener.follow('app', function (e) {
-                    if (!playerWasOpened) return;
-                    if (!e) return;
+                    if (!playerWasOpened || !e) return;
 
                     if (e.type === 'visible' || e.type === 'focus' || e.type === 'resume') {
-                        restoreControllerLater(250);
+                        scheduleControllerRestore();
                     }
                 });
             }
@@ -988,6 +1011,9 @@
         };
 
         this.start = function () {
+            clearRestoreTimer();
+            playerWasOpened = false;
+            restoreAttempts = 0;
             addController();
             activateController();
             updateFocus();
@@ -1001,10 +1027,14 @@
         };
 
         this.destroy = function () {
+            clearRestoreTimer();
+
             try {
                 Lampa.Controller.remove(controller_name);
             } catch (e) {}
+
             controllerReady = false;
+
             if (root) root.remove();
         };
     }
