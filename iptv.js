@@ -1,13 +1,13 @@
 // ==Lampa==
 // name: IPTV PRO Universal Debug
-// version: 3.0.6
+// version: 3.0.7
 // ==/Lampa==
 
 (function () {
     'use strict';
 
     function IPTVUniversalDebug() {
-        var storage_key = 'iptv_universal_debug_v306';
+        var storage_key = 'iptv_universal_debug_v307';
         var controller_name = 'iptv_universal_debug';
 
         var root;
@@ -190,6 +190,28 @@
             }
         }
 
+        function isTouchDevice() {
+            try {
+                return !!(
+                    ('ontouchstart' in window) ||
+                    (navigator && navigator.maxTouchPoints > 0) ||
+                    (window.matchMedia && window.matchMedia('(pointer: coarse)').matches)
+                );
+            } catch (e) {
+                return false;
+            }
+        }
+
+        function actionEvents() {
+            if (isTouchDevice()) return 'hover:touch';
+            return 'hover:enter hover:click click';
+        }
+
+        function menuOpenEvents() {
+            if (isTouchDevice()) return 'hover:touch';
+            return 'hover:enter hover:click click';
+        }
+
         function showDebug(tag, err) {
             var message = tag + ': ';
             if (err && err.message) message += err.message;
@@ -348,7 +370,7 @@
 
         function bindAction(el, tag, handler) {
             el.addClass('selector');
-            el.on('hover:enter hover:click hover:touch', function (e) {
+            el.on(actionEvents(), function (e) {
                 e.preventDefault();
                 e.stopPropagation();
                 runSafe(tag, handler);
@@ -1329,7 +1351,7 @@
             var item = $('<li class="menu__item selector iptv-universal-debug-item"></li>');
             item.append($('<div class="menu__text"></div>').text('IPTV PRO DEBUG'));
 
-            item.on('hover:enter hover:click hover:touch', function (e) {
+            item.on(menuOpenEventsGlobal(), function (e) {
                 e.preventDefault();
                 e.stopPropagation();
 
@@ -1347,6 +1369,23 @@
         } catch (e) {
             try { console.error('IPTV DEBUG init error', e); } catch (e2) {}
         }
+    }
+
+    function isTouchDeviceGlobal() {
+        try {
+            return !!(
+                ('ontouchstart' in window) ||
+                (navigator && navigator.maxTouchPoints > 0) ||
+                (window.matchMedia && window.matchMedia('(pointer: coarse)').matches)
+            );
+        } catch (e) {
+            return false;
+        }
+    }
+
+    function menuOpenEventsGlobal() {
+        if (isTouchDeviceGlobal()) return 'hover:touch';
+        return 'hover:enter hover:click click';
     }
 
     if (window.app_ready) init();
