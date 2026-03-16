@@ -1,13 +1,13 @@
 // ==Lampa==
 // name: IPTV PRO TV Rebuild
-// version: 2.2.0
+// version: 2.3.0
 // ==/Lampa==
 
 (function () {
     'use strict';
 
     function IPTVTvComponent() {
-        var storage_key = 'iptv_tv_rebuild_v220';
+        var storage_key = 'iptv_tv_rebuild_v230';
         var controller_name = 'iptv_tv_rebuild';
         var root, mainScreen, overlayScreen, leftCol, centerCol, rightCol;
 
@@ -18,8 +18,9 @@
         var playerWasOpened = false;
         var controllerReady = false;
         var restoreInterval = 0;
+        var watchdogInterval = 0;
         var restoreAttempts = 0;
-        var maxRestoreAttempts = 20;
+        var maxRestoreAttempts = 40;
 
         var config = loadConfig();
 
@@ -670,6 +671,26 @@
             }
         }
 
+        function startWatchdog() {
+            clearWatchdog();
+
+            watchdogInterval = setInterval(function () {
+                if (!root || !root.parent().length) return;
+                if (view !== 'browser') return;
+
+                try {
+                    Lampa.Controller.toggle(controller_name);
+                } catch (e) {}
+            }, 1200);
+        }
+
+        function clearWatchdog() {
+            if (watchdogInterval) {
+                clearInterval(watchdogInterval);
+                watchdogInterval = 0;
+            }
+        }
+
         function activateController() {
             try {
                 Lampa.Controller.toggle(controller_name);
@@ -703,16 +724,15 @@
                 rebuildController();
 
                 if (restoreAttempts >= maxRestoreAttempts) {
-                    playerWasOpened = false;
                     clearRestoreInterval();
                 }
-            }, 500);
+            }, 450);
         }
 
         function stopControllerRestore() {
+            clearRestoreInterval();
             playerWasOpened = false;
             restoreAttempts = 0;
-            clearRestoreInterval();
         }
 
         function playSelectedChannel() {
@@ -829,8 +849,6 @@
 
             Lampa.Controller.add(controller_name, {
                 up: function () {
-                    stopControllerRestore();
-
                     if (view === 'browser') {
                         if (state.activeColumn === 'left' && state.leftIndex > 0) {
                             state.leftIndex--;
@@ -863,8 +881,6 @@
                     }
                 },
                 down: function () {
-                    stopControllerRestore();
-
                     if (view === 'browser') {
                         if (state.activeColumn === 'left' && state.leftIndex < state.leftItems.length - 1) {
                             state.leftIndex++;
@@ -898,8 +914,6 @@
                     }
                 },
                 left: function () {
-                    stopControllerRestore();
-
                     if (view === 'browser') {
                         if (state.activeColumn === 'right') state.activeColumn = 'center';
                         else if (state.activeColumn === 'center') state.activeColumn = 'left';
@@ -914,8 +928,6 @@
                     }
                 },
                 right: function () {
-                    stopControllerRestore();
-
                     if (view === 'browser') {
                         if (state.activeColumn === 'left') {
                             var item = selectedLeftItem();
@@ -934,8 +946,6 @@
                     }
                 },
                 enter: function () {
-                    stopControllerRestore();
-
                     if (view === 'browser') {
                         if (state.activeColumn === 'left') activateLeftItem();
                         else if (state.activeColumn === 'center') {
@@ -957,8 +967,6 @@
                     }
                 },
                 back: function () {
-                    stopControllerRestore();
-
                     if (view !== 'browser') {
                         closeOverlay();
                         return;
@@ -979,8 +987,6 @@
                     Lampa.Activity.back();
                 },
                 menu: function () {
-                    stopControllerRestore();
-
                     if (view === 'playlists') {
                         var pl = selectedPlaylistItem();
                         if (!pl) return;
@@ -1059,11 +1065,17 @@
             stopControllerRestore();
             addController();
             activateController();
+            startWatchdog();
             updateFocus();
         };
 
-        this.pause = function () {};
-        this.stop = function () {};
+        this.pause = function () {
+            startWatchdog();
+        };
+
+        this.stop = function () {
+            startWatchdog();
+        };
 
         this.render = function () {
             return root;
@@ -1071,6 +1083,7 @@
 
         this.destroy = function () {
             stopControllerRestore();
+            clearWatchdog();
 
             try {
                 Lampa.Controller.remove(controller_name);
