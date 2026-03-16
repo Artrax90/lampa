@@ -1,31 +1,31 @@
 // ==Lampa==
 // name: IPTV PRO TV Rebuild
-// version: 2.5.0
+// version: 2.5.2
 // ==/Lampa==
 
 (function () {
     'use strict';
 
     function IPTVTvComponent() {
-        var storage_key = 'iptv_tv_rebuild_v250';
+        var storage_key = 'iptv_tv_rebuild_v252';
         var controller_name = 'iptv_tv_rebuild';
         var root, mainScreen, overlayScreen, leftCol, centerCol, rightCol;
 
-        var view = 'browser'; // browser | list_overlay | keyboard
-        var keyboardMode = 'add_playlist'; // add_playlist | rename_playlist | search_all | search_group | set_epg_url
+        var view = 'browser'; // browser | playlists | keyboard
+        var keyboardMode = 'add'; // add | search | rename | epg
         var keyboardLang = 'en';
         var controllerReady = false;
 
         var config = loadConfig();
-        var epgMap = {};
-        var epgLoadedFor = '';
+        var epgProgramMap = {};
+        var epgChannelMap = {};
 
         var state = {
             groups: {},
             allChannels: [],
-            visibleChannels: [],
             currentChannels: [],
             leftItems: [],
+            playlistItems: [],
             rightItems: [],
 
             activeColumn: 'left',
@@ -35,18 +35,10 @@
 
             overlayListIndex: 0,
             overlayKeyIndex: 0,
-            overlayType: '',
-            overlayTitle: '',
-            overlayItems: [],
-            overlayInfo: '',
-            overlayAction: null,
 
             keyboardValue: '',
             keyboardTitle: '',
-
-            currentGroup: config.lastGroup || '⭐ Избранное',
-            currentListType: 'group',
-            currentListTitle: 'Каналы'
+            currentGroup: config.lastGroup || '⭐ Избранное'
         };
 
         var KEYBOARDS = {
@@ -82,19 +74,12 @@
                 ],
                 favorites: [],
                 history: [],
-                broken: [],
-                hiddenGroups: [],
                 currentPlaylist: 0,
                 lastGroup: '⭐ Избранное',
                 lastChannelByGroup: {},
                 settings: {
-                    sort: 'default',
-                    dedupe: false,
-                    hideEmptyGroups: true,
-                    hideBroken: true,
                     compact: false,
-                    autoRefreshHours: 12,
-                    epgEnabled: false,
+                    epgEnabled: true,
                     epgUrl: ''
                 },
                 cache: {
@@ -121,17 +106,7 @@
             if (!raw.playlists.length) raw.playlists = def.playlists.slice();
 
             if (!Array.isArray(raw.favorites)) raw.favorites = [];
-            raw.favorites = raw.favorites.filter(function (item) {
-                return item && typeof item.url === 'string' && item.url.indexOf('http') === 0;
-            });
-
             if (!Array.isArray(raw.history)) raw.history = [];
-            raw.history = raw.history.filter(function (item) {
-                return item && typeof item.url === 'string';
-            }).slice(0, 50);
-
-            if (!Array.isArray(raw.broken)) raw.broken = [];
-            if (!Array.isArray(raw.hiddenGroups)) raw.hiddenGroups = [];
 
             if (typeof raw.currentPlaylist !== 'number' || raw.currentPlaylist < 0 || raw.currentPlaylist >= raw.playlists.length) {
                 raw.currentPlaylist = 0;
@@ -139,13 +114,8 @@
 
             if (!raw.lastChannelByGroup || typeof raw.lastChannelByGroup !== 'object') raw.lastChannelByGroup = {};
             if (!raw.settings || typeof raw.settings !== 'object') raw.settings = {};
-            raw.settings.sort = raw.settings.sort || 'default';
-            raw.settings.dedupe = !!raw.settings.dedupe;
-            raw.settings.hideEmptyGroups = raw.settings.hideEmptyGroups !== false;
-            raw.settings.hideBroken = raw.settings.hideBroken !== false;
             raw.settings.compact = !!raw.settings.compact;
-            raw.settings.autoRefreshHours = [0, 6, 12, 24].indexOf(raw.settings.autoRefreshHours) >= 0 ? raw.settings.autoRefreshHours : 12;
-            raw.settings.epgEnabled = !!raw.settings.epgEnabled;
+            raw.settings.epgEnabled = raw.settings.epgEnabled !== false;
             raw.settings.epgUrl = typeof raw.settings.epgUrl === 'string' ? raw.settings.epgUrl : '';
 
             if (!raw.cache || typeof raw.cache !== 'object') raw.cache = {};
@@ -175,15 +145,12 @@
 
         function isFavorite(channel) {
             if (!channel || !channel.url) return false;
+
             for (var i = 0; i < config.favorites.length; i++) {
                 if (config.favorites[i].url === channel.url) return true;
             }
-            return false;
-        }
 
-        function isBroken(channel) {
-            if (!channel || !channel.url) return false;
-            return config.broken.indexOf(channel.url) >= 0;
+            return false;
         }
 
         function addHistory(channel) {
@@ -203,7 +170,7 @@
                 time: Date.now()
             });
 
-            config.history = config.history.slice(0, 30);
+            config.history = config.history.slice(0, 20);
             saveConfig();
         }
 
@@ -236,74 +203,7 @@
             saveConfig();
             rebuildGroups();
             buildLeftItems();
-            if (state.currentListType === 'group') selectGroup(state.currentGroup, false);
-            else renderBrowser();
-        }
-
-        function toggleBroken(channel) {
-            if (!channel || !channel.url) return;
-
-            var idx = config.broken.indexOf(channel.url);
-
-            if (idx >= 0) {
-                config.broken.splice(idx, 1);
-                Lampa.Noty.show('Канал снят с проблемных');
-            } else {
-                config.broken.push(channel.url);
-                Lampa.Noty.show('Канал помечен как проблемный');
-            }
-
-            saveConfig();
-            rebuildGroups();
-            buildLeftItems();
-
-            if (state.currentListType === 'group') selectGroup(state.currentGroup, false);
-            else if (state.currentListType === 'history') showHistory();
-            else if (state.currentListType.indexOf('search') === 0) {
-                state.currentChannels = state.currentChannels.filter(function (item) {
-                    return !(config.settings.hideBroken && isBroken(item));
-                });
-                renderBrowser();
-            } else {
-                renderBrowser();
-            }
-        }
-
-        function toggleHiddenGroup(group) {
-            if (!group || group === '⭐ Избранное') return;
-
-            var idx = config.hiddenGroups.indexOf(group);
-            if (idx >= 0) {
-                config.hiddenGroups.splice(idx, 1);
-                Lampa.Noty.show('Группа снова показана');
-            } else {
-                config.hiddenGroups.push(group);
-                Lampa.Noty.show('Группа скрыта');
-                if (state.currentGroup === group) state.currentGroup = '⭐ Избранное';
-            }
-
-            saveConfig();
-            rebuildGroups();
-            buildLeftItems();
-            syncGroupSelection();
-            renderBrowser();
-        }
-
-        function cycleSortMode() {
-            var modes = ['default', 'name', 'hd'];
-            var current = modes.indexOf(config.settings.sort);
-            config.settings.sort = modes[(current + 1) % modes.length];
-            saveConfig();
-            rebuildGroups();
-            buildLeftItems();
-            if (state.currentListType === 'group') selectGroup(state.currentGroup, false);
-            else renderBrowser();
-        }
-
-        function currentSortTitle() {
-            if (config.settings.sort === 'name') return 'По имени';
-            if (config.settings.sort === 'hd') return 'HD сначала';
-            return 'Как в плейлисте';
+            selectGroup(state.currentGroup, false);
         }
 
         function selectedLeftItem() {
@@ -321,8 +221,16 @@
             return state.rightItems[state.rightIndex] || null;
         }
 
-        function selectedOverlayItem() {
-            return state.overlayItems[state.overlayListIndex] || null;
+        function selectedPlaylistItem() {
+            return state.playlistItems[state.overlayListIndex] || null;
+        }
+
+        function keyboardKeys() {
+            return KEYBOARDS[keyboardLang];
+        }
+
+        function keyCount() {
+            return keyboardKeys().length + KEYBOARD_ACTIONS.length;
         }
 
         function ensureStyles() {
@@ -348,7 +256,7 @@
                 '.iptv-title{font-size:1.5rem;font-weight:700;margin-bottom:1rem;word-break:break-word;}' +
                 '.iptv-meta{opacity:0.8;margin-bottom:0.75rem;}' +
                 '.iptv-url{opacity:0.6;margin-bottom:1rem;word-break:break-all;font-size:0.88rem;}' +
-                '.iptv-logo{max-width:100%;max-height:7rem;display:block;margin:0 0 1rem 0;border-radius:0.4rem;background:#111;}' +
+                '.iptv-logo{max-width:100%;max-height:7rem;display:block;margin:0 0 1rem 0;border-radius:0.4rem;background:#111;object-fit:contain;}' +
                 '.iptv-epg{margin-bottom:1rem;padding:0.75rem;border-radius:0.5rem;background:rgba(255,255,255,0.04);}' +
                 '.iptv-epg-title{font-weight:700;margin-bottom:0.35rem;}' +
                 '.iptv-epg-time{opacity:0.7;font-size:0.9rem;}' +
@@ -380,6 +288,21 @@
             return match ? match[1] : '';
         }
 
+        function extractAttribute(line, name) {
+            var m = line.match(new RegExp(name + '="([^"]*)"', 'i'));
+            return m ? m[1] : '';
+        }
+
+        function findNextUrl(lines, startIndex) {
+            for (var i = startIndex; i < lines.length; i++) {
+                var line = (lines[i] || '').trim();
+                if (!line) continue;
+                if (line.indexOf('#') === 0) continue;
+                return line;
+            }
+            return '';
+        }
+
         function parsePlaylistCount(text) {
             var lines = (text || '').split(/\r?\n/);
             var count = 0;
@@ -389,66 +312,16 @@
             return count;
         }
 
-        function dedupeChannels(list) {
-            if (!config.settings.dedupe) return list.slice();
-
-            var used = {};
-            return list.filter(function (item) {
-                var key = normalizeText(item.group) + '|' + normalizeText(item.name);
-                if (used[key]) return false;
-                used[key] = true;
-                return true;
-            });
-        }
-
-        function sortChannels(list) {
-            var copy = list.slice();
-
-            if (config.settings.sort === 'name') {
-                copy.sort(function (a, b) {
-                    return normalizeText(a.name) > normalizeText(b.name) ? 1 : -1;
-                });
-            } else if (config.settings.sort === 'hd') {
-                copy.sort(function (a, b) {
-                    if (!!a.hd === !!b.hd) return normalizeText(a.name) > normalizeText(b.name) ? 1 : -1;
-                    return a.hd ? -1 : 1;
-                });
-            }
-
-            return copy;
-        }
-
         function rebuildGroups() {
-            var list = dedupeChannels(state.allChannels);
-
-            if (config.settings.hideBroken) {
-                list = list.filter(function (item) {
-                    return !isBroken(item);
-                });
-            }
-
-            list = sortChannels(list);
-            state.visibleChannels = list;
-
             var groups = {
-                '⭐ Избранное': config.favorites.filter(function (item) {
-                    return !(config.settings.hideBroken && isBroken(item));
-                })
+                '⭐ Избранное': config.favorites.slice(),
+                'История': config.history.slice()
             };
 
-            list.forEach(function (channel) {
-                if (config.hiddenGroups.indexOf(channel.group) >= 0) return;
+            state.allChannels.forEach(function (channel) {
                 if (!groups[channel.group]) groups[channel.group] = [];
                 groups[channel.group].push(channel);
             });
-
-            if (config.settings.hideEmptyGroups) {
-                Object.keys(groups).forEach(function (group) {
-                    if (!groups[group] || !groups[group].length) delete groups[group];
-                });
-            }
-
-            if (!groups['⭐ Избранное']) groups['⭐ Избранное'] = [];
 
             state.groups = groups;
         }
@@ -457,12 +330,10 @@
             var items = [
                 { type: 'action', title: 'Добавить плейлист', action: 'open_add' },
                 { type: 'action', title: 'Список плейлистов', action: 'open_playlists' },
-                { type: 'action', title: 'Переименовать плейлист', action: 'rename_playlist' },
-                { type: 'action', title: 'Удалить плейлист', action: 'delete_playlist' },
-                { type: 'action', title: 'Поиск по всем', action: 'search_all' },
-                { type: 'action', title: 'Поиск в группе', action: 'search_group' },
-                { type: 'action', title: 'История', action: 'history' },
-                { type: 'action', title: 'Настройки', action: 'settings' }
+                { type: 'action', title: 'Поиск', action: 'search' },
+                { type: 'action', title: 'Переименовать плейлист', action: 'rename' },
+                { type: 'action', title: 'EPG URL', action: 'epg' },
+                { type: 'action', title: 'Компактный режим: ' + (config.settings.compact ? 'Да' : 'Нет'), action: 'compact' }
             ];
 
             Object.keys(state.groups).forEach(function (group) {
@@ -476,34 +347,6 @@
 
             state.leftItems = items;
             if (state.leftIndex >= items.length) state.leftIndex = 0;
-        }
-
-        function syncGroupSelection() {
-            var i, target = -1;
-
-            for (i = 0; i < state.leftItems.length; i++) {
-                if (state.leftItems[i].type === 'group' && state.leftItems[i].group === state.currentGroup) {
-                    target = i;
-                    break;
-                }
-            }
-
-            if (target >= 0) state.leftIndex = target;
-            else {
-                for (i = 0; i < state.leftItems.length; i++) {
-                    if (state.leftItems[i].type === 'group') {
-                        state.leftIndex = i;
-                        state.currentGroup = state.leftItems[i].group;
-                        break;
-                    }
-                }
-            }
-
-            if (state.currentListType === 'group') {
-                selectGroup(state.currentGroup, false);
-            } else {
-                renderBrowser();
-            }
         }
 
         function restoreLastChannel(group) {
@@ -522,58 +365,13 @@
             config.lastGroup = group;
             saveConfig();
 
-            state.currentListType = 'group';
-            state.currentListTitle = group === '⭐ Избранное' ? 'Избранное' : group;
             state.currentChannels = (state.groups[group] || []).slice();
-            state.centerIndex = restoreLastChannel(group);
+            state.centerIndex = group === 'История' ? 0 : restoreLastChannel(group);
             state.rightIndex = 0;
             buildRightItems();
 
             if (moveToCenter) state.activeColumn = 'center';
             renderBrowser();
-        }
-
-        function showHistory() {
-            state.currentListType = 'history';
-            state.currentListTitle = 'История';
-            state.currentChannels = config.history.filter(function (item) {
-                return !(config.settings.hideBroken && isBroken(item));
-            }).slice();
-            state.centerIndex = 0;
-            state.rightIndex = 0;
-            buildRightItems();
-            state.activeColumn = 'center';
-            renderBrowser();
-        }
-
-        function showSearchResults(title, list) {
-            state.currentListType = 'search';
-            state.currentListTitle = title;
-            state.currentChannels = list.slice();
-            state.centerIndex = 0;
-            state.rightIndex = 0;
-            buildRightItems();
-            state.activeColumn = 'center';
-            renderBrowser();
-        }
-
-        function buildRightItems() {
-            var channel = selectedChannel();
-
-            if (!channel) {
-                state.rightItems = [];
-                state.rightIndex = 0;
-                return;
-            }
-
-            state.rightItems = [
-                { title: 'Смотреть', action: 'play' },
-                { title: isFavorite(channel) ? 'Убрать из избранного' : 'Добавить в избранное', action: 'favorite' },
-                { title: isBroken(channel) ? 'Снять проблемный' : 'Пометить проблемным', action: 'broken' },
-                { title: 'Удалить текущий плейлист', action: 'remove_playlist' }
-            ];
-
-            if (state.rightIndex >= state.rightItems.length) state.rightIndex = 0;
         }
 
         function parsePlaylist(text) {
@@ -582,18 +380,19 @@
             var headerEpg = extractHeaderEpgUrl(text);
 
             state.allChannels = [];
-            epgLoadedFor = '';
+            epgProgramMap = {};
+            epgChannelMap = {};
 
             for (var i = 0; i < lines.length; i++) {
                 var line = (lines[i] || '').trim();
 
                 if (line.indexOf('#EXTINF') === 0) {
                     var name = (line.match(/,(.*)$/) || ['', ''])[1].trim();
-                    var group = (line.match(/group-title="([^"]+)"/i) || ['', 'ОБЩИЕ'])[1].trim();
-                    var url = lines[i + 1] ? lines[i + 1].trim() : '';
-                    var logo = (line.match(/tvg-logo="([^"]+)"/i) || ['', ''])[1];
-                    var tvgId = (line.match(/tvg-id="([^"]+)"/i) || ['', ''])[1];
-                    var tvgName = (line.match(/tvg-name="([^"]+)"/i) || ['', ''])[1];
+                    var group = extractAttribute(line, 'group-title') || 'ОБЩИЕ';
+                    var url = findNextUrl(lines, i + 1);
+                    var logo = extractAttribute(line, 'tvg-logo');
+                    var tvgId = extractAttribute(line, 'tvg-id');
+                    var tvgName = extractAttribute(line, 'tvg-name');
 
                     if (!name) name = 'Без названия';
                     if (!group) group = 'ОБЩИЕ';
@@ -615,17 +414,15 @@
             state.allChannels = list;
             rebuildGroups();
             buildLeftItems();
-            if (state.currentListType === 'group') {
-                syncGroupSelection();
-            } else {
-                renderBrowser();
-            }
 
-            if (!config.settings.epgUrl && headerEpg) {
+            if (headerEpg) {
                 config.settings.epgUrl = headerEpg;
+                config.settings.epgEnabled = true;
                 saveConfig();
             }
 
+            if (!state.groups[state.currentGroup]) state.currentGroup = '⭐ Избранное';
+            selectGroup(state.currentGroup, false);
             loadEpg(false);
         }
 
@@ -640,12 +437,6 @@
         function getCachedPlaylist(url) {
             var item = config.cache.playlists[url];
             if (!item || typeof item.text !== 'string') return null;
-
-            if (!config.settings.autoRefreshHours) return item.text;
-
-            var maxAge = config.settings.autoRefreshHours * 3600 * 1000;
-            if ((Date.now() - item.ts) > maxAge) return null;
-
             return item.text;
         }
 
@@ -745,14 +536,160 @@
 
             config.playlists.splice(config.currentPlaylist, 1);
 
-            if (config.currentPlaylist >= config.playlists.length) {
-                config.currentPlaylist = config.playlists.length - 1;
-            }
+            if (config.currentPlaylist >= config.playlists.length) config.currentPlaylist = config.playlists.length - 1;
             if (config.currentPlaylist < 0) config.currentPlaylist = 0;
 
             config.lastGroup = '⭐ Избранное';
             saveConfig();
             loadPlaylist(false);
+        }
+
+        function parseXmltvDate(value) {
+            if (!value) return 0;
+            var s = value.replace(/\s.*$/, '');
+            var year = parseInt(s.substr(0, 4), 10);
+            var month = parseInt(s.substr(4, 2), 10) - 1;
+            var day = parseInt(s.substr(6, 2), 10);
+            var hour = parseInt(s.substr(8, 2), 10);
+            var minute = parseInt(s.substr(10, 2), 10);
+            var sec = parseInt(s.substr(12, 2), 10) || 0;
+            return new Date(year, month, day, hour, minute, sec).getTime();
+        }
+
+        function parseXmltv(text) {
+            var now = Date.now();
+            epgProgramMap = {};
+            epgChannelMap = {};
+
+            try {
+                var doc = new DOMParser().parseFromString(text, 'text/xml');
+                var channels = doc.getElementsByTagName('channel');
+                var programmes = doc.getElementsByTagName('programme');
+                var i, j;
+
+                for (i = 0; i < channels.length; i++) {
+                    var ch = channels[i];
+                    var id = ch.getAttribute('id') || '';
+                    var iconNode = ch.getElementsByTagName('icon');
+                    var displayNames = ch.getElementsByTagName('display-name');
+                    var icon = iconNode.length ? (iconNode[0].getAttribute('src') || '') : '';
+
+                    if (!id) continue;
+
+                    var meta = {
+                        id: id,
+                        icon: icon,
+                        names: []
+                    };
+
+                    epgChannelMap[id] = meta;
+                    epgChannelMap[normalizeText(id)] = meta;
+
+                    for (j = 0; j < displayNames.length; j++) {
+                        var dn = safeText(displayNames[j].textContent).trim();
+                        if (!dn) continue;
+                        meta.names.push(dn);
+                        epgChannelMap[normalizeText(dn)] = meta;
+                    }
+                }
+
+                for (i = 0; i < programmes.length; i++) {
+                    var pr = programmes[i];
+                    var channelId = pr.getAttribute('channel') || '';
+                    var start = parseXmltvDate(pr.getAttribute('start'));
+                    var stop = parseXmltvDate(pr.getAttribute('stop'));
+                    var titles = pr.getElementsByTagName('title');
+                    var title = titles.length ? safeText(titles[0].textContent).trim() : '';
+
+                    if (!channelId || !title || !start || !stop) continue;
+                    if (!epgProgramMap[channelId]) epgProgramMap[channelId] = {};
+
+                    if (start <= now && stop >= now) {
+                        epgProgramMap[channelId].current = {
+                            title: title,
+                            start: start,
+                            stop: stop
+                        };
+                    } else if (start > now) {
+                        if (!epgProgramMap[channelId].next || start < epgProgramMap[channelId].next.start) {
+                            epgProgramMap[channelId].next = {
+                                title: title,
+                                start: start,
+                                stop: stop
+                            };
+                        }
+                    }
+                }
+            } catch (e) {}
+        }
+
+        function loadEpg(force) {
+            var url = config.settings.epgUrl;
+            var cacheItem;
+
+            epgProgramMap = {};
+            epgChannelMap = {};
+
+            if (!config.settings.epgEnabled || !url) {
+                renderRight();
+                return;
+            }
+
+            cacheItem = config.cache.epg[url];
+            if (!force && cacheItem && cacheItem.text) {
+                parseXmltv(cacheItem.text);
+                renderRight();
+                return;
+            }
+
+            $.ajax({
+                url: url,
+                method: 'GET',
+                dataType: 'text',
+                timeout: 25000,
+                success: function (text) {
+                    config.cache.epg[url] = {
+                        ts: Date.now(),
+                        text: text || ''
+                    };
+                    saveConfig();
+                    parseXmltv(text || '');
+                    renderRight();
+                },
+                error: function () {}
+            });
+        }
+
+        function getEpgChannelMeta(channel) {
+            if (!channel) return null;
+
+            if (channel.tvgId && epgChannelMap[channel.tvgId]) return epgChannelMap[channel.tvgId];
+            if (channel.tvgId && epgChannelMap[normalizeText(channel.tvgId)]) return epgChannelMap[normalizeText(channel.tvgId)];
+            if (channel.tvgName && epgChannelMap[normalizeText(channel.tvgName)]) return epgChannelMap[normalizeText(channel.tvgName)];
+            if (channel.name && epgChannelMap[normalizeText(channel.name)]) return epgChannelMap[normalizeText(channel.name)];
+
+            return null;
+        }
+
+        function getCurrentEpg(channel) {
+            var meta = getEpgChannelMeta(channel);
+            if (!meta) return null;
+            return epgProgramMap[meta.id] || null;
+        }
+
+        function getChannelLogo(channel) {
+            var meta = getEpgChannelMeta(channel);
+            if (channel && channel.logo) return channel.logo;
+            if (meta && meta.icon) return meta.icon;
+            return '';
+        }
+
+        function formatTime(ts) {
+            if (!ts) return '';
+            var d = new Date(ts);
+            var h = d.getHours();
+            var m = d.getMinutes();
+            return (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m;
         }
 
         function renderLeft() {
@@ -770,7 +707,7 @@
 
         function renderCenter() {
             centerCol.empty();
-            centerCol.append($('<div class="iptv-head"></div>').text(state.currentListTitle || 'Каналы'));
+            centerCol.append($('<div class="iptv-head"></div>').text(state.currentGroup || 'Каналы'));
 
             if (!state.currentChannels.length) {
                 centerCol.append($('<div class="iptv-empty"></div>').text('Список пуст'));
@@ -780,30 +717,8 @@
             state.currentChannels.forEach(function (channel) {
                 var title = safeText(channel.name);
                 if (isFavorite(channel)) title += ' ★';
-                if (isBroken(channel)) title += ' !';
                 centerCol.append($('<div class="iptv-item"></div>').text(title));
             });
-        }
-
-        function getCurrentEpg(channel) {
-            var entry, key;
-
-            if (!channel) return null;
-
-            key = channel.tvgId || channel.tvgName || channel.name;
-            if (channel.tvgId && epgMap[channel.tvgId]) entry = epgMap[channel.tvgId];
-            else if (channel.tvgName && epgMap[normalizeText(channel.tvgName)]) entry = epgMap[normalizeText(channel.tvgName)];
-            else if (channel.name && epgMap[normalizeText(channel.name)]) entry = epgMap[normalizeText(channel.name)];
-
-            return entry || null;
-        }
-
-        function formatTime(ts) {
-            if (!ts) return '';
-            var d = new Date(ts);
-            var h = d.getHours();
-            var m = d.getMinutes();
-            return (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m;
         }
 
         function renderRight() {
@@ -811,14 +726,16 @@
             rightCol.append($('<div class="iptv-head"></div>').text('Инфо'));
 
             var channel = selectedChannel();
+
             if (!channel) {
                 rightCol.append($('<div class="iptv-empty"></div>').text('Выберите канал'));
                 return;
             }
 
-            if (channel.logo) {
+            var logo = getChannelLogo(channel);
+            if (logo) {
                 var img = $('<img class="iptv-logo" alt="">');
-                img.attr('src', channel.logo);
+                img.attr('src', logo);
                 img.on('error', function () {
                     $(this).remove();
                 });
@@ -827,7 +744,6 @@
 
             rightCol.append($('<div class="iptv-title"></div>').text(safeText(channel.name)));
             rightCol.append($('<div class="iptv-meta"></div>').text('Группа: ' + safeText(channel.group)));
-            rightCol.append($('<div class="iptv-meta"></div>').text('Плейлист: ' + safeText(currentPlaylist() ? currentPlaylist().name : '')));
             rightCol.append($('<div class="iptv-url"></div>').text(safeText(channel.url)));
 
             var epg = getCurrentEpg(channel);
@@ -838,6 +754,7 @@
                     cur.append($('<div class="iptv-epg-time"></div>').text(formatTime(epg.current.start) + ' - ' + formatTime(epg.current.stop)));
                     rightCol.append(cur);
                 }
+
                 if (epg.next) {
                     var next = $('<div class="iptv-epg"></div>');
                     next.append($('<div class="iptv-epg-title"></div>').text('Далее: ' + epg.next.title));
@@ -847,13 +764,14 @@
             }
 
             buildRightItems();
+
             state.rightItems.forEach(function (item) {
                 rightCol.append($('<div class="iptv-item"></div>').text(item.title));
             });
         }
 
         function renderBrowser() {
-            if (state.currentListType === 'group' && state.currentGroup) {
+            if (state.currentGroup && state.currentGroup !== 'История') {
                 config.lastChannelByGroup[state.currentGroup] = selectedChannel() ? selectedChannel().url : '';
                 saveConfig();
             }
@@ -865,41 +783,34 @@
             updateFocus();
         }
 
-        function openListOverlay(title, items, info, action) {
-            view = 'list_overlay';
-            state.overlayTitle = title;
-            state.overlayItems = items;
-            state.overlayInfo = info || '';
-            state.overlayAction = action || null;
-            state.overlayListIndex = 0;
-            renderOverlay();
-        }
-
-        function openKeyboardOverlay(mode, title, value, lang) {
-            view = 'keyboard';
-            keyboardMode = mode;
-            keyboardLang = lang || 'en';
-            state.keyboardTitle = title;
-            state.keyboardValue = value || '';
-            state.overlayKeyIndex = 0;
-            renderOverlay();
-        }
-
-        function renderListOverlay() {
+        function renderPlaylistsOverlay() {
             overlayScreen.empty().removeClass('iptv-hidden');
+
+            state.playlistItems = config.playlists.map(function (pl, index) {
+                return {
+                    title: (index === config.currentPlaylist ? '• ' : '') + pl.name,
+                    subtitle: pl.url,
+                    index: index,
+                    locked: !!pl.locked
+                };
+            });
 
             var panel = $('<div class="iptv-overlay-panel"></div>');
             var main = $('<div class="iptv-overlay-main"></div>');
 
-            panel.append($('<div class="iptv-head"></div>').text(state.overlayTitle));
-            state.overlayItems.forEach(function (item) {
+            panel.append($('<div class="iptv-head"></div>').text('Плейлисты'));
+            state.playlistItems.forEach(function (item) {
                 panel.append($('<div class="iptv-item"></div>').text(item.title));
             });
 
-            main.append($('<div class="iptv-head"></div>').text('Информация'));
-            main.append($('<div class="iptv-item"></div>').text(state.overlayInfo || 'Enter: выбрать'));
-            if (selectedOverlayItem() && selectedOverlayItem().subtitle) {
-                main.append($('<div class="iptv-item"></div>').text(selectedOverlayItem().subtitle));
+            var selected = selectedPlaylistItem();
+            main.append($('<div class="iptv-head"></div>').text('Управление'));
+            if (selected) {
+                main.append($('<div class="iptv-title"></div>').text(selected.title));
+                main.append($('<div class="iptv-url"></div>').text(selected.subtitle || ''));
+                main.append($('<div class="iptv-item"></div>').text('Enter: выбрать'));
+                main.append($('<div class="iptv-item"></div>').text('Menu: удалить'));
+                main.append($('<div class="iptv-item"></div>').text('Back: назад'));
             }
 
             overlayScreen.append(panel, main);
@@ -940,7 +851,7 @@
         }
 
         function renderOverlay() {
-            if (view === 'list_overlay') renderListOverlay();
+            if (view === 'playlists') renderPlaylistsOverlay();
             else if (view === 'keyboard') renderKeyboardOverlay();
             else overlayScreen.addClass('iptv-hidden').empty();
         }
@@ -948,6 +859,65 @@
         function renderAll() {
             renderBrowser();
             renderOverlay();
+        }
+
+        function openKeyboard(mode, title, value, lang) {
+            view = 'keyboard';
+            keyboardMode = mode;
+            keyboardLang = lang || 'en';
+            state.keyboardTitle = title;
+            state.keyboardValue = value || '';
+            state.overlayKeyIndex = 0;
+            renderOverlay();
+        }
+
+        function closeOverlay() {
+            view = 'browser';
+            overlayScreen.addClass('iptv-hidden').empty();
+            updateFocus();
+        }
+
+        function submitKeyboard() {
+            var value = safeText(state.keyboardValue).trim();
+
+            if (keyboardMode === 'add') {
+                if (!value || value.indexOf('http') !== 0) {
+                    Lampa.Noty.show('Неверный URL');
+                    return;
+                }
+                validateAndAddPlaylist(value);
+                return;
+            }
+
+            if (keyboardMode === 'rename') {
+                renameCurrentPlaylist(value);
+                closeOverlay();
+                return;
+            }
+
+            if (keyboardMode === 'epg') {
+                config.settings.epgUrl = value;
+                config.settings.epgEnabled = true;
+                saveConfig();
+                closeOverlay();
+                loadEpg(true);
+                return;
+            }
+
+            var filtered = state.allChannels.filter(function (channel) {
+                return normalizeText(channel.name).indexOf(normalizeText(value)) !== -1;
+            });
+
+            state.currentGroup = 'Поиск';
+            state.currentChannels = filtered;
+            state.centerIndex = 0;
+            state.rightIndex = 0;
+            buildRightItems();
+            state.activeColumn = 'center';
+            closeOverlay();
+            renderBrowser();
+
+            if (!filtered.length) Lampa.Noty.show('Ничего не найдено');
         }
 
         function applyKey(token) {
@@ -965,53 +935,6 @@
             }
 
             renderOverlay();
-        }
-
-        function submitKeyboard() {
-            var value = safeText(state.keyboardValue).trim();
-
-            if (keyboardMode === 'add_playlist') {
-                if (!value || value.indexOf('http') !== 0) {
-                    Lampa.Noty.show('Неверный URL');
-                    return;
-                }
-                validateAndAddPlaylist(value);
-                return;
-            }
-
-            if (keyboardMode === 'rename_playlist') {
-                renameCurrentPlaylist(value);
-                closeOverlay();
-                return;
-            }
-
-            if (keyboardMode === 'set_epg_url') {
-                config.settings.epgUrl = value;
-                saveConfig();
-                closeOverlay();
-                loadEpg(true);
-                renderBrowser();
-                return;
-            }
-
-            var source = keyboardMode === 'search_group'
-                ? (state.groups[state.currentGroup] || [])
-                : state.visibleChannels;
-
-            var filtered = source.filter(function (channel) {
-                return normalizeText(channel.name).indexOf(normalizeText(value)) !== -1;
-            });
-
-            closeOverlay();
-            showSearchResults(keyboardMode === 'search_group' ? 'Поиск в группе' : 'Поиск по всем', filtered);
-
-            if (!filtered.length) Lampa.Noty.show('Ничего не найдено');
-        }
-
-        function closeOverlay() {
-            view = 'browser';
-            overlayScreen.addClass('iptv-hidden').empty();
-            updateFocus();
         }
 
         function activateController() {
@@ -1076,78 +999,22 @@
             }
         }
 
-        function openPlaylists() {
-            openListOverlay(
-                'Плейлисты',
-                config.playlists.map(function (pl, index) {
-                    return {
-                        title: (index === config.currentPlaylist ? '• ' : '') + pl.name,
-                        subtitle: pl.url,
-                        index: index
-                    };
-                }),
-                'Enter: выбрать',
-                function (item) {
-                    config.currentPlaylist = item.index;
-                    config.lastGroup = '⭐ Избранное';
-                    saveConfig();
-                    closeOverlay();
-                    loadPlaylist(false);
-                }
-            );
-        }
+        function buildRightItems() {
+            var channel = selectedChannel();
 
-        function openSettings() {
-            openListOverlay(
-                'Настройки',
-                [
-                    { title: 'Сортировка: ' + currentSortTitle(), action: 'sort' },
-                    { title: 'Убирать дубли: ' + (config.settings.dedupe ? 'Да' : 'Нет'), action: 'dedupe' },
-                    { title: 'Скрывать пустые группы: ' + (config.settings.hideEmptyGroups ? 'Да' : 'Нет'), action: 'hide_empty' },
-                    { title: 'Скрывать проблемные: ' + (config.settings.hideBroken ? 'Да' : 'Нет'), action: 'hide_broken' },
-                    { title: 'Компактный режим: ' + (config.settings.compact ? 'Да' : 'Нет'), action: 'compact' },
-                    { title: 'Автообновление: ' + config.settings.autoRefreshHours + 'ч', action: 'refresh_hours' },
-                    { title: 'EPG включен: ' + (config.settings.epgEnabled ? 'Да' : 'Нет'), action: 'epg_enabled' },
-                    { title: 'EPG URL: ' + (config.settings.epgUrl ? 'Задан' : 'Не задан'), action: 'epg_url' },
-                    { title: 'Обновить плейлист сейчас', action: 'refresh_now' },
-                    { title: 'Очистить историю', action: 'clear_history' },
-                    { title: 'Показать все группы', action: 'clear_hidden' },
-                    { title: 'Очистить список проблемных', action: 'clear_broken' }
-                ],
-                'Enter: изменить настройку',
-                function (item) {
-                    if (item.action === 'sort') cycleSortMode();
-                    else if (item.action === 'dedupe') config.settings.dedupe = !config.settings.dedupe;
-                    else if (item.action === 'hide_empty') config.settings.hideEmptyGroups = !config.settings.hideEmptyGroups;
-                    else if (item.action === 'hide_broken') config.settings.hideBroken = !config.settings.hideBroken;
-                    else if (item.action === 'compact') config.settings.compact = !config.settings.compact;
-                    else if (item.action === 'refresh_hours') {
-                        var values = [0, 6, 12, 24];
-                        var idx = values.indexOf(config.settings.autoRefreshHours);
-                        config.settings.autoRefreshHours = values[(idx + 1) % values.length];
-                    }
-                    else if (item.action === 'epg_enabled') config.settings.epgEnabled = !config.settings.epgEnabled;
-                    else if (item.action === 'epg_url') {
-                        openKeyboardOverlay('set_epg_url', 'Введите XMLTV URL', config.settings.epgUrl || 'http://', 'en');
-                        return;
-                    }
-                    else if (item.action === 'refresh_now') {
-                        closeOverlay();
-                        loadPlaylist(true);
-                        return;
-                    }
-                    else if (item.action === 'clear_history') config.history = [];
-                    else if (item.action === 'clear_hidden') config.hiddenGroups = [];
-                    else if (item.action === 'clear_broken') config.broken = [];
+            if (!channel) {
+                state.rightItems = [];
+                state.rightIndex = 0;
+                return;
+            }
 
-                    saveConfig();
-                    rebuildGroups();
-                    buildLeftItems();
-                    if (item.action === 'epg_enabled') loadEpg(true);
-                    closeOverlay();
-                    renderBrowser();
-                }
-            );
+            state.rightItems = [
+                { title: 'Смотреть', action: 'play' },
+                { title: isFavorite(channel) ? 'Убрать из избранного' : 'Добавить в избранное', action: 'favorite' },
+                { title: 'Удалить текущий плейлист', action: 'remove_playlist' }
+            ];
+
+            if (state.rightIndex >= state.rightItems.length) state.rightIndex = 0;
         }
 
         function activateLeftItem() {
@@ -1155,14 +1022,20 @@
             if (!item) return;
 
             if (item.type === 'action') {
-                if (item.action === 'open_add') openKeyboardOverlay('add_playlist', 'Введите URL плейлиста', 'http://', 'en');
-                else if (item.action === 'open_playlists') openPlaylists();
-                else if (item.action === 'rename_playlist') openKeyboardOverlay('rename_playlist', 'Новое имя плейлиста', currentPlaylist() ? currentPlaylist().name : '', 'ru');
-                else if (item.action === 'delete_playlist') deleteCurrentPlaylist();
-                else if (item.action === 'search_all') openKeyboardOverlay('search_all', 'Поиск по всем каналам', '', 'ru');
-                else if (item.action === 'search_group') openKeyboardOverlay('search_group', 'Поиск в текущей группе', '', 'ru');
-                else if (item.action === 'history') showHistory();
-                else if (item.action === 'settings') openSettings();
+                if (item.action === 'open_add') openKeyboard('add', 'Введите URL плейлиста', 'http://', 'en');
+                else if (item.action === 'open_playlists') {
+                    view = 'playlists';
+                    state.overlayListIndex = config.currentPlaylist;
+                    renderOverlay();
+                }
+                else if (item.action === 'search') openKeyboard('search', 'Поиск канала', '', 'ru');
+                else if (item.action === 'rename') openKeyboard('rename', 'Новое имя плейлиста', currentPlaylist() ? currentPlaylist().name : '', 'ru');
+                else if (item.action === 'epg') openKeyboard('epg', 'XMLTV URL', config.settings.epgUrl || 'http://', 'en');
+                else if (item.action === 'compact') {
+                    config.settings.compact = !config.settings.compact;
+                    saveConfig();
+                    renderBrowser();
+                }
                 return;
             }
 
@@ -1177,7 +1050,6 @@
 
             if (item.action === 'play') playSelectedChannel();
             else if (item.action === 'favorite') toggleFavorite(channel);
-            else if (item.action === 'broken') toggleBroken(channel);
             else if (item.action === 'remove_playlist') deleteCurrentPlaylist();
         }
 
@@ -1229,126 +1101,19 @@
                 return;
             }
 
-            if (view === 'list_overlay') {
-                var overlayItem = overlayScreen.find('.iptv-overlay-panel .iptv-item').eq(state.overlayListIndex).addClass('active');
-                ensureVisible(overlayScreen.find('.iptv-overlay-panel'), overlayItem, state.overlayListIndex);
+            if (view === 'playlists') {
+                var playlistItem = overlayScreen.find('.iptv-overlay-panel .iptv-item').eq(state.overlayListIndex).addClass('active');
+                ensureVisible(overlayScreen.find('.iptv-overlay-panel'), playlistItem, state.overlayListIndex);
                 return;
             }
 
             if (view === 'keyboard') {
-                var keys = keyboardKeys();
-                if (state.overlayKeyIndex < keys.length) {
+                if (state.overlayKeyIndex < keyboardKeys().length) {
                     overlayScreen.find('.iptv-key').eq(state.overlayKeyIndex).addClass('active');
                 } else {
-                    overlayScreen.find('.iptv-action-btn').eq(state.overlayKeyIndex - keys.length).addClass('active');
+                    overlayScreen.find('.iptv-action-btn').eq(state.overlayKeyIndex - keyboardKeys().length).addClass('active');
                 }
             }
-        }
-
-        function keyCount() {
-            return keyboardKeys().length + KEYBOARD_ACTIONS.length;
-        }
-
-        function keyboardKeys() {
-            return KEYBOARDS[keyboardLang];
-        }
-
-        function parseXmltvDate(value) {
-            if (!value) return 0;
-            var s = value.replace(/\s.*$/, '');
-            var year = parseInt(s.substr(0, 4), 10);
-            var month = parseInt(s.substr(4, 2), 10) - 1;
-            var day = parseInt(s.substr(6, 2), 10);
-            var hour = parseInt(s.substr(8, 2), 10);
-            var minute = parseInt(s.substr(10, 2), 10);
-            var sec = parseInt(s.substr(12, 2), 10) || 0;
-            return new Date(year, month, day, hour, minute, sec).getTime();
-        }
-
-        function parseXmltv(text) {
-            var map = {};
-            var now = Date.now();
-
-            try {
-                var doc = new DOMParser().parseFromString(text, 'text/xml');
-                var programmes = doc.getElementsByTagName('programme');
-
-                for (var i = 0; i < programmes.length; i++) {
-                    var pr = programmes[i];
-                    var channel = pr.getAttribute('channel') || '';
-                    var start = parseXmltvDate(pr.getAttribute('start'));
-                    var stop = parseXmltvDate(pr.getAttribute('stop'));
-                    var titles = pr.getElementsByTagName('title');
-                    var title = titles.length ? (titles[0].textContent || '') : '';
-
-                    if (!channel || !title || !start || !stop) continue;
-
-                    if (!map[channel]) map[channel] = {};
-
-                    if (start <= now && stop >= now) {
-                        map[channel].current = {
-                            title: title,
-                            start: start,
-                            stop: stop
-                        };
-                    } else if (start > now) {
-                        if (!map[channel].next || start < map[channel].next.start) {
-                            map[channel].next = {
-                                title: title,
-                                start: start,
-                                stop: stop
-                            };
-                        }
-                    }
-                }
-            } catch (e) {}
-
-            var aliasMap = {};
-            Object.keys(map).forEach(function (key) {
-                aliasMap[key] = map[key];
-                aliasMap[normalizeText(key)] = map[key];
-            });
-
-            epgMap = aliasMap;
-        }
-
-        function loadEpg(force) {
-            var url = config.settings.epgUrl;
-            var cacheItem;
-
-            epgMap = {};
-            epgLoadedFor = '';
-
-            if (!config.settings.epgEnabled || !url) {
-                renderRight();
-                return;
-            }
-
-            cacheItem = config.cache.epg[url];
-            if (!force && cacheItem && cacheItem.text && ((Date.now() - cacheItem.ts) < 12 * 3600 * 1000)) {
-                parseXmltv(cacheItem.text);
-                epgLoadedFor = url;
-                renderRight();
-                return;
-            }
-
-            $.ajax({
-                url: url,
-                method: 'GET',
-                dataType: 'text',
-                timeout: 25000,
-                success: function (text) {
-                    config.cache.epg[url] = {
-                        ts: Date.now(),
-                        text: text || ''
-                    };
-                    saveConfig();
-                    parseXmltv(text || '');
-                    epgLoadedFor = url;
-                    renderRight();
-                },
-                error: function () {}
-            });
         }
 
         function addController() {
@@ -1362,7 +1127,7 @@
                             updateFocus();
                         } else if (state.activeColumn === 'center' && state.centerIndex > 0) {
                             state.centerIndex--;
-                            if (state.currentListType === 'group' && state.currentGroup) {
+                            if (state.currentGroup && state.currentGroup !== 'История' && state.currentGroup !== 'Поиск') {
                                 config.lastChannelByGroup[state.currentGroup] = selectedChannel() ? selectedChannel().url : '';
                                 saveConfig();
                             }
@@ -1375,11 +1140,9 @@
                         return;
                     }
 
-                    if (view === 'list_overlay') {
-                        if (state.overlayListIndex > 0) {
-                            state.overlayListIndex--;
-                            updateFocus();
-                        }
+                    if (view === 'playlists') {
+                        if (state.overlayListIndex > 0) state.overlayListIndex--;
+                        updateFocus();
                         return;
                     }
 
@@ -1395,7 +1158,7 @@
                             updateFocus();
                         } else if (state.activeColumn === 'center' && state.centerIndex < state.currentChannels.length - 1) {
                             state.centerIndex++;
-                            if (state.currentListType === 'group' && state.currentGroup) {
+                            if (state.currentGroup && state.currentGroup !== 'История' && state.currentGroup !== 'Поиск') {
                                 config.lastChannelByGroup[state.currentGroup] = selectedChannel() ? selectedChannel().url : '';
                                 saveConfig();
                             }
@@ -1408,11 +1171,9 @@
                         return;
                     }
 
-                    if (view === 'list_overlay') {
-                        if (state.overlayListIndex < state.overlayItems.length - 1) {
-                            state.overlayListIndex++;
-                            updateFocus();
-                        }
+                    if (view === 'playlists') {
+                        if (state.overlayListIndex < state.playlistItems.length - 1) state.overlayListIndex++;
+                        updateFocus();
                         return;
                     }
 
@@ -1469,14 +1230,19 @@
                         else if (state.activeColumn === 'center') {
                             if (state.currentChannels.length) state.activeColumn = 'right';
                         } else if (state.activeColumn === 'right') activateRightItem();
-
                         updateFocus();
                         return;
                     }
 
-                    if (view === 'list_overlay') {
-                        var overlayItem = selectedOverlayItem();
-                        if (overlayItem && state.overlayAction) state.overlayAction(overlayItem);
+                    if (view === 'playlists') {
+                        var playlistItem = selectedPlaylistItem();
+                        if (playlistItem) {
+                            config.currentPlaylist = playlistItem.index;
+                            config.lastGroup = '⭐ Избранное';
+                            saveConfig();
+                            closeOverlay();
+                            loadPlaylist(false);
+                        }
                         return;
                     }
 
@@ -1509,27 +1275,32 @@
                     exitPlugin();
                 },
                 menu: function () {
+                    if (view === 'playlists') {
+                        var selected = selectedPlaylistItem();
+                        if (!selected) return;
+
+                        var target = config.playlists[selected.index];
+                        if (!target || target.locked || config.playlists.length <= 1) {
+                            Lampa.Noty.show('Этот плейлист нельзя удалить');
+                            return;
+                        }
+
+                        config.playlists.splice(selected.index, 1);
+                        if (config.currentPlaylist >= config.playlists.length) {
+                            config.currentPlaylist = config.playlists.length - 1;
+                        }
+                        if (config.currentPlaylist < 0) config.currentPlaylist = 0;
+                        saveConfig();
+                        closeOverlay();
+                        loadPlaylist(false);
+                        return;
+                    }
+
                     if (view === 'keyboard') {
                         if (state.keyboardValue.length) {
                             state.keyboardValue = state.keyboardValue.slice(0, -1);
                             renderOverlay();
                         }
-                        return;
-                    }
-
-                    if (view === 'list_overlay') {
-                        if (state.overlayTitle === 'История') {
-                            config.history = [];
-                            saveConfig();
-                            closeOverlay();
-                            Lampa.Noty.show('История очищена');
-                        }
-                        return;
-                    }
-
-                    if (state.activeColumn === 'left') {
-                        var item = selectedLeftItem();
-                        if (item && item.type === 'group') toggleHiddenGroup(item.group);
                         return;
                     }
 
