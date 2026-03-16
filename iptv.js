@@ -1,13 +1,13 @@
 // ==Lampa==
 // name: IPTV PRO Universal
-// version: 4.0.0
+// version: 4.0.1
 // ==/Lampa==
 
 (function () {
     'use strict';
 
     function IPTVUniversal() {
-        var storage_key = 'iptv_universal_v400';
+        var storage_key = 'iptv_universal_v401';
         var controller_name = 'iptv_universal';
 
         var root;
@@ -398,30 +398,22 @@
         function getMatchedEpg(channel) {
             var id;
             var byNameId;
-            var programs;
             var key;
 
             if (!channel) return null;
 
             id = channel.id || '';
-            if (id && epg.programsById[id]) {
-                return epg.programsById[id];
-            }
+            if (id && epg.programsById[id]) return epg.programsById[id];
 
             key = normalizeName(channel.epgName || channel.name);
             byNameId = epg.namesMap[key];
-            if (byNameId && epg.programsById[byNameId]) {
-                return epg.programsById[byNameId];
-            }
+            if (byNameId && epg.programsById[byNameId]) return epg.programsById[byNameId];
 
             key = normalizeName(channel.name);
             byNameId = epg.namesMap[key];
-            if (byNameId && epg.programsById[byNameId]) {
-                return epg.programsById[byNameId];
-            }
+            if (byNameId && epg.programsById[byNameId]) return epg.programsById[byNameId];
 
-            programs = epg.programsById[channel.epgName || ''];
-            return programs || null;
+            return null;
         }
 
         function buildRightItems() {
@@ -445,11 +437,12 @@
         function parsePlaylist(text) {
             var lines = (text || '').split(/\r?\n/);
             var headerChecked = false;
+            var i;
 
             state.channels = [];
             state.playlistEpgUrl = '';
 
-            for (var i = 0; i < lines.length; i++) {
+            for (i = 0; i < lines.length; i++) {
                 var line = (lines[i] || '').trim();
 
                 if (!headerChecked && line.indexOf('#EXTM3U') === 0) {
@@ -522,6 +515,7 @@
                     runSafe('parseEpg', function () {
                         parseEpg(xmlText || '', url);
                         renderRight();
+                        renderCenter();
                         updateFocus();
                     });
                 },
@@ -576,13 +570,10 @@
             }
 
             Object.keys(epg.programsById).forEach(function (id) {
-                var list = epg.programsById[id];
-
-                list.sort(function (a, b) {
+                epg.programsById[id].sort(function (a, b) {
                     return a.start.getTime() - b.start.getTime();
                 });
-
-                if (list.length > 4) epg.programsById[id] = list.slice(0, 4);
+                if (epg.programsById[id].length > 4) epg.programsById[id] = epg.programsById[id].slice(0, 4);
             });
 
             state.epgLoaded = true;
@@ -705,6 +696,7 @@
 
         function appendChannelRow(container, channel, subtitle) {
             var row = $('<div class="iptv-row"></div>');
+
             if (channel.logo) row.append($('<img class="iptv-logo" alt="">').attr('src', channel.logo));
             else row.append($('<div class="iptv-logo"></div>'));
 
@@ -712,6 +704,7 @@
             text.append($('<div class="iptv-row-title"></div>').text(channel.name));
             if (subtitle) text.append($('<div class="iptv-row-sub"></div>').text(subtitle));
             row.append(text);
+
             container.append(row);
         }
 
@@ -755,9 +748,7 @@
                 var subtitle = '';
                 var row = $('<div class="iptv-item"></div>');
 
-                if (epgMatch && epgMatch.length) {
-                    subtitle = formatTime(epgMatch[0].start) + ' ' + epgMatch[0].title;
-                }
+                if (epgMatch && epgMatch.length) subtitle = formatTime(epgMatch[0].start) + ' ' + epgMatch[0].title;
 
                 appendChannelRow(row, channel, subtitle);
 
@@ -781,20 +772,19 @@
 
             var channel = selectedChannel();
             var epgMatch = getMatchedEpg(channel);
+            var epgBox;
 
             if (!channel) {
                 rightCol.append($('<div class="iptv-empty"></div>').text('Выберите канал'));
                 return;
             }
 
-            if (channel.logo) {
-                rightCol.append($('<img class="iptv-logo iptv-logo--big" alt="">').attr('src', channel.logo));
-            }
+            if (channel.logo) rightCol.append($('<img class="iptv-logo iptv-logo--big" alt="">').attr('src', channel.logo));
 
             rightCol.append($('<div class="iptv-title"></div>').text(channel.name));
             rightCol.append($('<div class="iptv-meta"></div>').text('Группа: ' + channel.group));
 
-            var epgBox = $('<div class="iptv-epg"></div>');
+            epgBox = $('<div class="iptv-epg"></div>');
             if (epgMatch && epgMatch.length) {
                 epgBox.append(
                     $('<div class="iptv-epg-line"></div>').append(
@@ -1445,6 +1435,8 @@
 
             layout.append(leftCol, centerCol, rightCol);
             root.append(mobileTabs, layout, overlay);
+
+            renderAll();
 
             runSafe('create.loadPlaylist', function () {
                 loadPlaylist();
