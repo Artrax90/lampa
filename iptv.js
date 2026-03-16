@@ -1,13 +1,13 @@
 // ==Lampa==
 // name: IPTV PRO Universal Debug
-// version: 3.0.2
+// version: 3.0.3
 // ==/Lampa==
 
 (function () {
     'use strict';
 
     function IPTVUniversalDebug() {
-        var storage_key = 'iptv_universal_debug_v302';
+        var storage_key = 'iptv_universal_debug_v303';
         var controller_name = 'iptv_universal_debug';
 
         var root;
@@ -275,7 +275,7 @@
                 '.iptv-right{width:26rem;padding:1.5rem;border-right:none;background:#080a0d;}' +
                 '.iptv-head{padding:1rem;font-size:1.25rem;font-weight:700;}' +
                 '.iptv-sub{padding:0 1rem 0.75rem 1rem;color:rgba(255,255,255,0.6);font-size:0.92rem;}' +
-                '.iptv-item,.iptv-key,.iptv-kbtn,.iptv-tab{margin:0.35rem;padding:0.95rem;border-radius:0.55rem;background:rgba(255,255,255,0.05);cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;}' +
+                '.iptv-item,.iptv-key,.iptv-kbtn,.iptv-tab{margin:0.35rem;padding:0.95rem;border-radius:0.55rem;background:rgba(255,255,255,0.05);cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation;}' +
                 '.iptv-item.active,.iptv-key.active,.iptv-kbtn.active,.iptv-tab.active{background:#2962ff!important;}' +
                 '.iptv-empty{padding:1rem;color:rgba(255,255,255,0.6);}' +
                 '.iptv-title{font-size:1.4rem;font-weight:700;margin-bottom:0.8rem;word-break:break-word;}' +
@@ -311,8 +311,24 @@
         }
 
         function bindAction(el, tag, handler) {
+            var touchStamp = 0;
+
             el.addClass('selector');
+
             el.on('hover:enter hover:click hover:touch click touchend', function (e) {
+                var now = Date.now();
+                var type = e.type || '';
+
+                if (type === 'touchend' || type === 'hover:touch') {
+                    touchStamp = now;
+                }
+
+                if ((type === 'click' || type === 'hover:click') && now - touchStamp < 500) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return;
+                }
+
                 e.preventDefault();
                 e.stopPropagation();
                 runSafe(tag, handler);
