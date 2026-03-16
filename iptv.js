@@ -1,13 +1,13 @@
 // ==Lampa==
 // name: IPTV PRO Universal Debug
-// version: 3.0.3
+// version: 3.0.4
 // ==/Lampa==
 
 (function () {
     'use strict';
 
     function IPTVUniversalDebug() {
-        var storage_key = 'iptv_universal_debug_v303';
+        var storage_key = 'iptv_universal_debug_v304';
         var controller_name = 'iptv_universal_debug';
 
         var root;
@@ -23,6 +23,8 @@
         var keyboardMode = 'add'; // add | search
         var keyboardLang = 'en';
         var controllerReady = false;
+        var lastActionTag = '';
+        var lastActionAt = 0;
 
         var config = loadConfig();
 
@@ -77,6 +79,11 @@
                         name: 'MEGA',
                         url: 'https://raw.githubusercontent.com/loganettv/playlists/refs/heads/main/mega.m3u',
                         locked: true
+                    },
+                    {
+                        name: 'RU IPTV Org',
+                        url: 'https://iptv-org.github.io/iptv/countries/ru.m3u',
+                        locked: true
                     }
                 ],
                 favorites: [],
@@ -87,14 +94,16 @@
 
         function loadConfig() {
             var raw;
+            var def = defaults();
+
             try {
-                raw = Lampa.Storage.get(storage_key, defaults()) || {};
+                raw = Lampa.Storage.get(storage_key, def) || {};
             } catch (e) {
-                raw = defaults();
+                raw = def;
             }
 
             if (!Array.isArray(raw.playlists) || !raw.playlists.length) {
-                raw.playlists = defaults().playlists.slice();
+                raw.playlists = def.playlists.slice();
             }
 
             raw.playlists = raw.playlists.filter(function (pl) {
@@ -107,7 +116,8 @@
                 };
             });
 
-            if (!raw.playlists.length) raw.playlists = defaults().playlists.slice();
+            ensureBuiltinPlaylist(raw.playlists, def.playlists[0]);
+            ensureBuiltinPlaylist(raw.playlists, def.playlists[1]);
 
             if (!Array.isArray(raw.favorites)) raw.favorites = [];
 
@@ -128,6 +138,26 @@
             if (typeof raw.lastGroup !== 'string') raw.lastGroup = 'STAR_FAVORITES';
 
             return raw;
+        }
+
+        function ensureBuiltinPlaylist(playlists, builtin) {
+            var exists = false;
+            var i;
+
+            for (i = 0; i < playlists.length; i++) {
+                if (playlists[i].url === builtin.url) {
+                    playlists[i].locked = true;
+                    if (!playlists[i].name) playlists[i].name = builtin.name;
+                    exists = true;
+                    break;
+                }
+            }
+
+            if (!exists) playlists.push({
+                name: builtin.name,
+                url: builtin.url,
+                locked: true
+            });
         }
 
         function saveConfig() {
@@ -318,15 +348,36 @@
             el.on('hover:enter hover:click hover:touch click touchend', function (e) {
                 var now = Date.now();
                 var type = e.type || '';
+                var isTouchLike = type === 'touchend' || type === 'hover:touch';
+                var isClickLike = type === 'click' || type === 'hover:click';
 
-                if (type === 'touchend' || type === 'hover:touch') {
+                if (isTouchLike) {
+                    if (lastActionTag === tag && now - lastActionAt < 450) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        return;
+                    }
+
                     touchStamp = now;
+                    lastActionTag = tag;
+                    lastActionAt = now;
                 }
 
-                if ((type === 'click' || type === 'hover:click') && now - touchStamp < 500) {
+                if (isClickLike && now - touchStamp < 500) {
                     e.preventDefault();
                     e.stopPropagation();
                     return;
+                }
+
+                if (!isTouchLike && !isClickLike && lastActionTag === tag && now - lastActionAt < 250) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return;
+                }
+
+                if (!isTouchLike) {
+                    lastActionTag = tag;
+                    lastActionAt = now;
                 }
 
                 e.preventDefault();
