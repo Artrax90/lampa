@@ -1,25 +1,20 @@
 // ==Lampa==
 // name: IPTV PRO TV Rebuild
-// version: 2.3.1
+// version: 2.4.0
 // ==/Lampa==
 
 (function () {
     'use strict';
 
     function IPTVTvComponent() {
-        var storage_key = 'iptv_tv_rebuild_v231';
+        var storage_key = 'iptv_tv_rebuild_v240';
         var controller_name = 'iptv_tv_rebuild';
         var root, mainScreen, overlayScreen, leftCol, centerCol, rightCol;
 
         var view = 'browser'; // browser | playlists | keyboard
         var keyboardMode = 'add'; // add | search
         var keyboardLang = 'en';
-
-        var playerWasOpened = false;
         var controllerReady = false;
-        var restoreTimer = 0;
-        var restoreAttempt = 0;
-        var maxRestoreAttempts = 10;
 
         var config = loadConfig();
 
@@ -663,107 +658,59 @@
             loadPlaylist();
         }
 
-        function clearRestoreTimer() {
-            if (restoreTimer) {
-                clearTimeout(restoreTimer);
-                restoreTimer = 0;
-            }
-        }
-
         function activateController() {
             try {
                 Lampa.Controller.toggle(controller_name);
             } catch (e) {}
         }
 
-        function removeController() {
-            try {
-                Lampa.Controller.remove(controller_name);
-            } catch (e) {}
-            controllerReady = false;
-        }
-
-        function rebuildController() {
-            removeController();
-            addController();
-            activateController();
-            updateFocus();
-        }
-
-        function playerVisible() {
-            return $('.player:visible, .player__body:visible, .player-video:visible, .player__video:visible').length > 0;
-        }
-
-        function rootVisible() {
-            return !!(root && root.parent().length && root.is(':visible'));
-        }
-
-        function scheduleControllerRestore() {
-            if (!playerWasOpened) return;
-
-            clearRestoreTimer();
-            restoreAttempt = 0;
-
-            function attempt() {
-                clearRestoreTimer();
-
-                if (!rootVisible()) {
-                    restoreTimer = setTimeout(attempt, 400);
-                    return;
-                }
-
-                if (playerVisible()) {
-                    restoreTimer = setTimeout(attempt, 500);
-                    return;
-                }
-
-                rebuildController();
-                playerWasOpened = false;
-                restoreAttempt = 0;
-            }
-
-            function retryLoop() {
-                if (!playerWasOpened) return;
-
-                restoreAttempt++;
-
-                if (!rootVisible() || playerVisible()) {
-                    if (restoreAttempt < maxRestoreAttempts) {
-                        restoreTimer = setTimeout(retryLoop, 500);
-                    }
-                    return;
-                }
-
-                attempt();
-            }
-
-            restoreTimer = setTimeout(retryLoop, 600);
-        }
-
-        function stopRestore() {
-            clearRestoreTimer();
-            playerWasOpened = false;
-            restoreAttempt = 0;
+        function restoreAfterPlayer() {
+            setTimeout(function () {
+                activateController();
+                updateFocus();
+            }, 50);
         }
 
         function playSelectedChannel() {
             var channel = selectedChannel();
+            var enabled = controller_name;
 
             if (!channel || !channel.url) {
                 Lampa.Noty.show('Канал не выбран');
                 return;
             }
 
-            playerWasOpened = true;
-            restoreAttempt = 0;
-            clearRestoreTimer();
+            try {
+                if (Lampa.Controller.enabled() && Lampa.Controller.enabled().name) {
+                    enabled = Lampa.Controller.enabled().name;
+                }
+            } catch (e) {}
 
-            removeController();
+            var video = {
+                title: channel.name,
+                url: channel.url
+            };
 
-            Lampa.Player.play({
-                url: channel.url,
-                title: channel.name
-            });
+            if (typeof Lampa.Player.iptv === 'function') {
+                Lampa.Player.iptv(video);
+            }
+
+            if (typeof Lampa.Player.playlist === 'function') {
+                Lampa.Player.playlist([video]);
+            } else {
+                Lampa.Player.play(video);
+            }
+
+            if (typeof Lampa.Player.callback === 'function') {
+                Lampa.Player.callback(function () {
+                    try {
+                        Lampa.Controller.toggle(enabled);
+                    } catch (e) {
+                        activateController();
+                    }
+                    restoreAfterPlayer();
+                });
+            }
         }
 
         function activateLeftItem() {
@@ -1034,22 +981,6 @@
             controllerReady = true;
         }
 
-        function bindPlayerReturn() {
-            if (Lampa.Listener && Lampa.Listener.follow) {
-                Lampa.Listener.follow('player', function () {
-                    if (playerWasOpened) scheduleControllerRestore();
-                });
-
-                Lampa.Listener.follow('app', function (e) {
-                    if (!playerWasOpened || !e) return;
-
-                    if (e.type === 'visible' || e.type === 'focus' || e.type === 'resume') {
-                        scheduleControllerRestore();
-                    }
-                });
-            }
-        }
-
         this.create = function () {
             ensureStyles();
 
@@ -1064,14 +995,12 @@
             mainScreen.append(leftCol, centerCol, rightCol);
             root.append(mainScreen, overlayScreen);
 
-            bindPlayerReturn();
             loadPlaylist();
 
             return root;
         };
 
         this.start = function () {
-            stopRestore();
             addController();
             activateController();
             updateFocus();
@@ -1085,8 +1014,11 @@
         };
 
         this.destroy = function () {
-            stopRestore();
-            removeController();
+            try {
+                Lampa.Controller.remove(controller_name);
+            } catch (e) {}
+
+            controllerReady = false;
 
             if (root) root.remove();
         };
