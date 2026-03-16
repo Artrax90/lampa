@@ -1,15 +1,21 @@
 // ==Lampa==
-// name: IPTV PRO TV Rebuild
-// version: 2.4.6
+// name: IPTV PRO Universal
+// version: 3.0.0
 // ==/Lampa==
 
 (function () {
     'use strict';
 
-    function IPTVTvComponent() {
-        var storage_key = 'iptv_tv_rebuild_v246';
-        var controller_name = 'iptv_tv_rebuild';
-        var root, mainScreen, overlayScreen, leftCol, centerCol, rightCol;
+    function IPTVUniversal() {
+        var storage_key = 'iptv_universal_v300';
+        var controller_name = 'iptv_universal';
+
+        var root;
+        var layout;
+        var leftCol;
+        var centerCol;
+        var rightCol;
+        var overlay;
 
         var view = 'browser'; // browser | playlists | keyboard
         var keyboardMode = 'add'; // add | search
@@ -20,23 +26,20 @@
 
         var state = {
             groups: {},
-            allChannels: [],
+            channels: [],
             currentChannels: [],
             leftItems: [],
             playlistItems: [],
             rightItems: [],
-
             activeColumn: 'left',
             leftIndex: 0,
             centerIndex: 0,
             rightIndex: 0,
-
-            overlayListIndex: 0,
-            overlayKeyIndex: 0,
-
+            overlayIndex: 0,
+            keyIndex: 0,
             keyboardValue: '',
             keyboardTitle: '',
-            lastGroup: config.lastGroup || '⭐ Избранное'
+            currentGroup: config.lastGroup || '⭐ Избранное'
         };
 
         var KEYBOARDS = {
@@ -61,8 +64,8 @@
             { code: 'submit', title: 'Готово' }
         ];
 
-        function loadConfig() {
-            var raw = Lampa.Storage.get(storage_key, {
+        function defaults() {
+            return {
                 playlists: [
                     {
                         name: 'MEGA',
@@ -73,15 +76,14 @@
                 favorites: [],
                 currentPlaylist: 0,
                 lastGroup: '⭐ Избранное'
-            }) || {};
+            };
+        }
 
-            if (!Array.isArray(raw.playlists) || !raw.playlists.length) {
-                raw.playlists = [{
-                    name: 'MEGA',
-                    url: 'https://raw.githubusercontent.com/loganettv/playlists/refs/heads/main/mega.m3u',
-                    locked: true
-                }];
-            }
+        function loadConfig() {
+            var raw = Lampa.Storage.get(storage_key, defaults()) || {};
+            var def = defaults();
+
+            if (!Array.isArray(raw.playlists) || !raw.playlists.length) raw.playlists = def.playlists.slice();
 
             raw.playlists = raw.playlists.filter(function (pl) {
                 return pl && typeof pl.url === 'string' && pl.url.indexOf('http') === 0;
@@ -93,13 +95,7 @@
                 };
             });
 
-            if (!raw.playlists.length) {
-                raw.playlists = [{
-                    name: 'MEGA',
-                    url: 'https://raw.githubusercontent.com/loganettv/playlists/refs/heads/main/mega.m3u',
-                    locked: true
-                }];
-            }
+            if (!raw.playlists.length) raw.playlists = def.playlists.slice();
 
             if (!Array.isArray(raw.favorites)) raw.favorites = [];
             raw.favorites = raw.favorites.filter(function (item) {
@@ -127,10 +123,6 @@
 
         function currentPlaylist() {
             return config.playlists[config.currentPlaylist] || null;
-        }
-
-        function safeText(value) {
-            return value == null ? '' : String(value);
         }
 
         function isFavorite(channel) {
@@ -169,86 +161,53 @@
             saveConfig();
             rebuildGroups();
             buildLeftItems();
-            syncGroupSelection();
-            renderBrowser();
-        }
-
-        function selectedLeftItem() {
-            return state.leftItems[state.leftIndex] || null;
-        }
-
-        function selectedChannel() {
-            if (!state.currentChannels.length) return null;
-            if (state.centerIndex < 0) state.centerIndex = 0;
-            if (state.centerIndex >= state.currentChannels.length) state.centerIndex = state.currentChannels.length - 1;
-            return state.currentChannels[state.centerIndex] || null;
-        }
-
-        function selectedRightItem() {
-            return state.rightItems[state.rightIndex] || null;
-        }
-
-        function selectedPlaylistItem() {
-            return state.playlistItems[state.overlayListIndex] || null;
-        }
-
-        function keyboardKeys() {
-            return KEYBOARDS[keyboardLang];
-        }
-
-        function keyCount() {
-            return keyboardKeys().length + KEYBOARD_ACTIONS.length;
+            selectGroup(state.currentGroup, false);
         }
 
         function ensureStyles() {
-            if ($('#iptv-tv-rebuild-style').length) return;
+            if ($('#iptv-universal-style').length) return;
 
             $('head').append(
-                '<style id="iptv-tv-rebuild-style">' +
-                '.iptv-root{position:fixed;top:0;left:0;right:0;bottom:0;z-index:1000;background:#0b0d10;color:#fff;padding-top:5rem;font-size:1.05em;overflow:hidden;}' +
-                '.iptv-hidden{display:none!important;}' +
-                '.iptv-main{display:flex;width:100%;height:100%;}' +
-                '.iptv-col{height:100%;overflow-y:auto;overflow-x:hidden;box-sizing:border-box;border-right:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.02);scroll-behavior:auto;-webkit-overflow-scrolling:touch;}' +
-                '.iptv-left{width:24rem;}' +
+                '<style id="iptv-universal-style">' +
+                '.iptv-root{position:fixed;top:0;left:0;right:0;bottom:0;z-index:1000;background:#0b0d10;color:#fff;padding-top:5rem;overflow:hidden;}' +
+                '.iptv-layout{display:flex;width:100%;height:100%;}' +
+                '.iptv-col{height:100%;overflow-y:auto;box-sizing:border-box;background:rgba(255,255,255,0.02);border-right:1px solid rgba(255,255,255,0.08);-webkit-overflow-scrolling:touch;}' +
+                '.iptv-left{width:23rem;}' +
                 '.iptv-center{flex:1;}' +
-                '.iptv-right{width:27rem;padding:2rem;border-right:none;background:#080a0d;}' +
-                '.iptv-head{padding:1rem;font-size:1.3rem;font-weight:700;}' +
-                '.iptv-subhead{padding:0.5rem 1rem;color:rgba(255,255,255,0.6);font-size:0.95rem;}' +
-                '.iptv-item,.iptv-key,.iptv-action-btn{cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;}' +
-                '.iptv-item{margin:0.4rem;padding:1rem;border-radius:0.5rem;background:rgba(255,255,255,0.04);word-break:break-word;}' +
-                '.iptv-item.active{background:#2962ff!important;}' +
+                '.iptv-right{width:26rem;padding:1.5rem;border-right:none;background:#080a0d;}' +
+                '.iptv-head{padding:1rem;font-size:1.25rem;font-weight:700;}' +
+                '.iptv-sub{padding:0 1rem 0.75rem 1rem;color:rgba(255,255,255,0.6);font-size:0.92rem;}' +
+                '.iptv-item,.iptv-key,.iptv-kbtn{margin:0.35rem;padding:0.95rem;border-radius:0.55rem;background:rgba(255,255,255,0.05);cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;}' +
+                '.iptv-item.active,.iptv-key.active,.iptv-kbtn.active{background:#2962ff!important;}' +
                 '.iptv-empty{padding:1rem;color:rgba(255,255,255,0.6);}' +
-                '.iptv-title{font-size:1.5rem;font-weight:700;margin-bottom:1rem;word-break:break-word;}' +
-                '.iptv-meta{opacity:0.8;margin-bottom:1rem;}' +
-                '.iptv-url{opacity:0.6;margin-bottom:1.5rem;word-break:break-all;font-size:0.9rem;}' +
-                '.iptv-overlay{position:absolute;top:5rem;left:0;right:0;bottom:0;background:#0b0d10;display:flex;overflow:hidden;z-index:5;}' +
-                '.iptv-overlay-panel{width:28rem;border-right:1px solid rgba(255,255,255,0.08);overflow-y:auto;background:rgba(255,255,255,0.03);}' +
-                '.iptv-overlay-main{flex:1;padding:2rem;overflow-y:auto;}' +
-                '.iptv-display{padding:1rem;border-radius:0.5rem;background:rgba(255,255,255,0.06);word-break:break-all;margin-bottom:1.5rem;min-height:3.2rem;}' +
-                '.iptv-kb-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;}' +
-                '.iptv-kb-lang{padding:0.6rem 1rem;border-radius:0.5rem;background:rgba(255,255,255,0.05);}' +
-                '.iptv-keyboard{display:grid;grid-template-columns:repeat(10,1fr);gap:0.5rem;}' +
-                '.iptv-key{padding:0.8rem 0.4rem;text-align:center;border-radius:0.5rem;background:rgba(255,255,255,0.05);}' +
-                '.iptv-key.active{background:#2962ff!important;}' +
-                '.iptv-actions{display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-top:1rem;}' +
-                '.iptv-action-btn{padding:1rem;text-align:center;border-radius:0.5rem;background:rgba(255,255,255,0.05);}' +
-                '.iptv-action-btn.active{background:#2962ff!important;}' +
-                '@media screen and (max-width: 900px){' +
-                '.iptv-main{display:block;overflow-y:auto;}' +
+                '.iptv-title{font-size:1.4rem;font-weight:700;margin-bottom:0.8rem;word-break:break-word;}' +
+                '.iptv-meta{opacity:0.82;margin-bottom:0.75rem;word-break:break-word;}' +
+                '.iptv-url{opacity:0.6;font-size:0.9rem;word-break:break-all;margin-bottom:1.25rem;}' +
+                '.iptv-overlay{position:absolute;top:5rem;left:0;right:0;bottom:0;background:#0b0d10;display:flex;z-index:10;}' +
+                '.iptv-overlay.hidden{display:none;}' +
+                '.iptv-overlay-left{width:28rem;overflow-y:auto;border-right:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);}' +
+                '.iptv-overlay-right{flex:1;overflow-y:auto;padding:1.5rem;}' +
+                '.iptv-display{padding:1rem;border-radius:0.55rem;background:rgba(255,255,255,0.06);min-height:3rem;margin-bottom:1rem;word-break:break-all;}' +
+                '.iptv-keyboard{display:grid;grid-template-columns:repeat(10,1fr);gap:0.45rem;}' +
+                '.iptv-key{margin:0;padding:0.8rem 0.3rem;text-align:center;}' +
+                '.iptv-krow{display:grid;grid-template-columns:repeat(4,1fr);gap:0.45rem;margin-top:0.75rem;}' +
+                '.iptv-kbtn{margin:0;text-align:center;}' +
+                '@media (max-width: 980px){' +
+                '.iptv-root{padding-top:4rem;overflow-y:auto;}' +
+                '.iptv-layout{display:block;height:auto;min-height:100%;}' +
                 '.iptv-col{width:100%!important;height:auto;max-height:none;border-right:none;border-bottom:1px solid rgba(255,255,255,0.08);}' +
                 '.iptv-right{padding:1rem 1rem 6rem 1rem;}' +
-                '.iptv-root{padding-top:4rem;}' +
                 '.iptv-overlay{display:block;overflow-y:auto;}' +
-                '.iptv-overlay-panel{width:100%;border-right:none;border-bottom:1px solid rgba(255,255,255,0.08);}' +
-                '.iptv-overlay-main{padding:1rem 1rem 6rem 1rem;}' +
+                '.iptv-overlay-left{width:100%;border-right:none;border-bottom:1px solid rgba(255,255,255,0.08);}' +
+                '.iptv-overlay-right{padding:1rem 1rem 6rem 1rem;}' +
                 '}' +
                 '</style>'
             );
         }
 
-        function bindHoverAction(element, handler) {
-            element.addClass('selector');
-            element.on('hover:enter hover:click hover:touch', function (e) {
+        function bindAction(el, handler) {
+            el.addClass('selector');
+            el.on('hover:enter hover:click hover:touch click touchend', function (e) {
                 e.preventDefault();
                 e.stopPropagation();
                 handler();
@@ -260,7 +219,7 @@
                 '⭐ Избранное': config.favorites.slice()
             };
 
-            state.allChannels.forEach(function (channel) {
+            state.channels.forEach(function (channel) {
                 if (!groups[channel.group]) groups[channel.group] = [];
                 groups[channel.group].push(channel);
             });
@@ -270,74 +229,29 @@
 
         function buildLeftItems() {
             var items = [
-                { type: 'action', title: 'Добавить плейлист', action: 'open_add' },
-                { type: 'action', title: 'Список плейлистов', action: 'open_playlists' },
-                { type: 'action', title: 'Поиск', action: 'open_search' }
+                { type: 'action', title: 'Добавить плейлист', action: 'add' },
+                { type: 'action', title: 'Список плейлистов', action: 'playlists' },
+                { type: 'action', title: 'Поиск', action: 'search' }
             ];
 
             Object.keys(state.groups).forEach(function (group) {
                 items.push({
                     type: 'group',
                     title: group,
-                    count: (state.groups[group] || []).length,
-                    group: group
+                    group: group,
+                    count: (state.groups[group] || []).length
                 });
             });
 
             state.leftItems = items;
-            if (state.leftIndex >= items.length) state.leftIndex = 0;
+            if (state.leftIndex >= state.leftItems.length) state.leftIndex = 0;
         }
 
-        function syncGroupSelection() {
-            var i, target = -1;
-
-            for (i = 0; i < state.leftItems.length; i++) {
-                if (state.leftItems[i].type === 'group' && state.leftItems[i].group === state.lastGroup) {
-                    target = i;
-                    break;
-                }
-            }
-
-            if (target >= 0) state.leftIndex = target;
-            else {
-                for (i = 0; i < state.leftItems.length; i++) {
-                    if (state.leftItems[i].type === 'group') {
-                        state.leftIndex = i;
-                        state.lastGroup = state.leftItems[i].group;
-                        break;
-                    }
-                }
-            }
-
-            applyCurrentGroup();
-        }
-
-        function applyCurrentGroup() {
-            var item = selectedLeftItem();
-            var i;
-
-            if (!item || item.type !== 'group') {
-                for (i = 0; i < state.leftItems.length; i++) {
-                    if (state.leftItems[i].type === 'group') {
-                        state.leftIndex = i;
-                        item = state.leftItems[i];
-                        break;
-                    }
-                }
-            }
-
-            if (item && item.type === 'group') {
-                state.lastGroup = item.group;
-                config.lastGroup = item.group;
-                saveConfig();
-                state.currentChannels = (state.groups[item.group] || []).slice();
-            } else {
-                state.currentChannels = [];
-            }
-
-            state.centerIndex = 0;
-            state.rightIndex = 0;
-            buildRightItems();
+        function selectedChannel() {
+            if (!state.currentChannels.length) return null;
+            if (state.centerIndex < 0) state.centerIndex = 0;
+            if (state.centerIndex >= state.currentChannels.length) state.centerIndex = state.currentChannels.length - 1;
+            return state.currentChannels[state.centerIndex] || null;
         }
 
         function buildRightItems() {
@@ -358,9 +272,19 @@
             if (state.rightIndex >= state.rightItems.length) state.rightIndex = 0;
         }
 
+        function findNextUrl(lines, startIndex) {
+            for (var i = startIndex; i < lines.length; i++) {
+                var line = (lines[i] || '').trim();
+                if (!line) continue;
+                if (line.indexOf('#') === 0) continue;
+                return line;
+            }
+            return '';
+        }
+
         function parsePlaylist(text) {
             var lines = (text || '').split(/\r?\n/);
-            state.allChannels = [];
+            state.channels = [];
 
             for (var i = 0; i < lines.length; i++) {
                 var line = (lines[i] || '').trim();
@@ -368,13 +292,13 @@
                 if (line.indexOf('#EXTINF') === 0) {
                     var name = (line.match(/,(.*)$/) || ['', ''])[1].trim();
                     var group = (line.match(/group-title="([^"]+)"/i) || ['', 'ОБЩИЕ'])[1].trim();
-                    var url = lines[i + 1] ? lines[i + 1].trim() : '';
+                    var url = findNextUrl(lines, i + 1);
 
                     if (!name) name = 'Без названия';
                     if (!group) group = 'ОБЩИЕ';
 
                     if (url && url.indexOf('http') === 0) {
-                        state.allChannels.push({
+                        state.channels.push({
                             name: name,
                             url: url,
                             group: group
@@ -402,7 +326,7 @@
                 url: playlist.url,
                 method: 'GET',
                 dataType: 'text',
-                timeout: 15000,
+                timeout: 20000,
                 success: function (text) {
                     parsePlaylist(text || '');
                     renderAll();
@@ -415,29 +339,65 @@
             });
         }
 
+        function syncGroupSelection() {
+            var index = -1;
+            var i;
+
+            for (i = 0; i < state.leftItems.length; i++) {
+                if (state.leftItems[i].type === 'group' && state.leftItems[i].group === state.lastGroup) {
+                    index = i;
+                    break;
+                }
+            }
+
+            if (index >= 0) state.leftIndex = index;
+            else {
+                for (i = 0; i < state.leftItems.length; i++) {
+                    if (state.leftItems[i].type === 'group') {
+                        state.leftIndex = i;
+                        state.lastGroup = state.leftItems[i].group;
+                        break;
+                    }
+                }
+            }
+
+            selectGroup(state.lastGroup, false);
+        }
+
+        function selectGroup(group, moveCenter) {
+            state.lastGroup = group;
+            config.lastGroup = group;
+            saveConfig();
+
+            state.currentChannels = (state.groups[group] || []).slice();
+            state.centerIndex = 0;
+            state.rightIndex = 0;
+            buildRightItems();
+
+            if (moveCenter) state.activeColumn = 'center';
+            renderBrowser();
+        }
+
         function renderLeft() {
             leftCol.empty();
-
             leftCol.append($('<div class="iptv-head"></div>').text(currentPlaylist() ? currentPlaylist().name : 'IPTV'));
-            leftCol.append($('<div class="iptv-subhead"></div>').text('Действия и группы'));
+            leftCol.append($('<div class="iptv-sub"></div>').text('Действия и группы'));
 
             state.leftItems.forEach(function (item, index) {
                 var row = $('<div class="iptv-item"></div>');
                 row.text(item.type === 'group' ? (item.title + ' (' + item.count + ')') : item.title);
 
-                bindHoverAction(row, function () {
+                bindAction(row, function () {
                     state.leftIndex = index;
                     state.activeColumn = 'left';
 
-                    if (item.type === 'group') {
-                        state.lastGroup = item.group;
-                        applyCurrentGroup();
-                        state.activeColumn = 'center';
+                    if (item.type === 'action') {
+                        if (item.action === 'add') openKeyboard('add', 'Введите URL плейлиста', 'http://', 'en');
+                        else if (item.action === 'playlists') openPlaylists();
+                        else if (item.action === 'search') openKeyboard('search', 'Поиск канала', '', 'ru');
                     } else {
-                        activateLeftItem();
+                        selectGroup(item.group, true);
                     }
-
-                    updateFocus();
                 });
 
                 leftCol.append(row);
@@ -446,7 +406,7 @@
 
         function renderCenter() {
             centerCol.empty();
-            centerCol.append($('<div class="iptv-head"></div>').text('Каналы'));
+            centerCol.append($('<div class="iptv-head"></div>').text(state.lastGroup || 'Каналы'));
 
             if (!state.currentChannels.length) {
                 centerCol.append($('<div class="iptv-empty"></div>').text('Список пуст'));
@@ -459,7 +419,7 @@
 
                 var row = $('<div class="iptv-item"></div>').text(title);
 
-                bindHoverAction(row, function () {
+                bindAction(row, function () {
                     state.centerIndex = index;
                     state.activeColumn = 'center';
                     renderRight();
@@ -481,19 +441,23 @@
                 return;
             }
 
-            rightCol.append($('<div class="iptv-title"></div>').text(safeText(channel.name)));
-            rightCol.append($('<div class="iptv-meta"></div>').text('Группа: ' + safeText(channel.group)));
-            rightCol.append($('<div class="iptv-url"></div>').text(safeText(channel.url)));
+            rightCol.append($('<div class="iptv-title"></div>').text(channel.name));
+            rightCol.append($('<div class="iptv-meta"></div>').text('Группа: ' + channel.group));
+            rightCol.append($('<div class="iptv-url"></div>').text(channel.url));
 
             buildRightItems();
 
             state.rightItems.forEach(function (item, index) {
                 var row = $('<div class="iptv-item"></div>').text(item.title);
 
-                bindHoverAction(row, function () {
+                bindAction(row, function () {
                     state.rightIndex = index;
                     state.activeColumn = 'right';
-                    activateRightItem();
+
+                    if (item.action === 'play') playSelectedChannel();
+                    else if (item.action === 'favorite') toggleFavorite(selectedChannel());
+                    else if (item.action === 'remove_playlist') removeCurrentPlaylist();
+
                     updateFocus();
                 });
 
@@ -508,7 +472,15 @@
             updateFocus();
         }
 
-        function buildPlaylistItems() {
+        function openPlaylists() {
+            view = 'playlists';
+            state.overlayIndex = config.currentPlaylist;
+            renderOverlay();
+        }
+
+        function renderPlaylists() {
+            overlay.empty().removeClass('hidden');
+
             state.playlistItems = config.playlists.map(function (pl, index) {
                 return {
                     title: (index === config.currentPlaylist ? '• ' : '') + pl.name,
@@ -518,126 +490,116 @@
                 };
             });
 
-            if (state.overlayListIndex >= state.playlistItems.length) state.overlayListIndex = 0;
-        }
+            var left = $('<div class="iptv-overlay-left"></div>');
+            var right = $('<div class="iptv-overlay-right"></div>');
 
-        function renderPlaylistsOverlay() {
-            overlayScreen.empty().removeClass('iptv-hidden');
+            left.append($('<div class="iptv-head"></div>').text('Плейлисты'));
 
-            buildPlaylistItems();
-
-            var panel = $('<div class="iptv-overlay-panel"></div>');
-            var main = $('<div class="iptv-overlay-main"></div>');
-
-            panel.append($('<div class="iptv-head"></div>').text('Плейлисты'));
             state.playlistItems.forEach(function (item, index) {
                 var row = $('<div class="iptv-item"></div>').text(item.title);
 
-                bindHoverAction(row, function () {
-                    state.overlayListIndex = index;
-                    selectPlaylist(item.index);
-                    updateFocus();
+                bindAction(row, function () {
+                    state.overlayIndex = index;
+                    config.currentPlaylist = item.index;
+                    config.lastGroup = '⭐ Избранное';
+                    saveConfig();
+                    closeOverlay();
+                    loadPlaylist();
                 });
 
-                panel.append(row);
+                left.append(row);
             });
 
             var selected = selectedPlaylistItem();
-            main.append($('<div class="iptv-head"></div>').text('Управление'));
+            right.append($('<div class="iptv-head"></div>').text('Управление'));
+
             if (selected) {
-                main.append($('<div class="iptv-title"></div>').text(selected.title));
-                main.append($('<div class="iptv-url"></div>').text(selected.subtitle || ''));
-                main.append($('<div class="iptv-item"></div>').text('Enter/tap: выбрать'));
-                main.append($('<div class="iptv-item"></div>').text('Menu: удалить'));
-                main.append($('<div class="iptv-item"></div>').text('Back: назад'));
+                right.append($('<div class="iptv-title"></div>').text(selected.title));
+                right.append($('<div class="iptv-url"></div>').text(selected.subtitle || ''));
+
+                var closeBtn = $('<div class="iptv-item"></div>').text('Закрыть');
+                bindAction(closeBtn, function () {
+                    closeOverlay();
+                });
+                right.append(closeBtn);
             }
 
-            overlayScreen.append(panel, main);
+            overlay.append(left, right);
             updateFocus();
         }
 
-        function renderKeyboardOverlay() {
-            overlayScreen.empty().removeClass('iptv-hidden');
+        function openKeyboard(mode, title, value, lang) {
+            view = 'keyboard';
+            keyboardMode = mode;
+            keyboardLang = lang || 'en';
+            state.keyboardTitle = title;
+            state.keyboardValue = value || '';
+            state.keyIndex = 0;
+            renderOverlay();
+        }
 
-            var panel = $('<div class="iptv-overlay-panel"></div>');
-            var main = $('<div class="iptv-overlay-main"></div>');
+        function renderKeyboard() {
+            overlay.empty().removeClass('hidden');
 
-            panel.append($('<div class="iptv-head"></div>').text(keyboardMode === 'add' ? 'Добавить плейлист' : 'Поиск'));
-            panel.append($('<div class="iptv-item"></div>').text('QWERTY клавиатура'));
-            panel.append($('<div class="iptv-item"></div>').text('Menu: удалить символ'));
-            panel.append($('<div class="iptv-item"></div>').text('Back: отмена'));
+            var left = $('<div class="iptv-overlay-left"></div>');
+            var right = $('<div class="iptv-overlay-right"></div>');
 
-            var kbHead = $('<div class="iptv-kb-head"></div>');
-            kbHead.append($('<div class="iptv-head"></div>').text(state.keyboardTitle));
-            kbHead.append($('<div class="iptv-kb-lang"></div>').text(keyboardLang.toUpperCase()));
-            main.append(kbHead);
+            left.append($('<div class="iptv-head"></div>').text(state.keyboardTitle));
+            left.append($('<div class="iptv-sub"></div>').text('Tap/click/OK по клавишам'));
 
-            main.append($('<div class="iptv-display"></div>').text(state.keyboardValue || ' '));
+            right.append($('<div class="iptv-kb-head"></div>')
+                .append($('<div class="iptv-head"></div>').text(keyboardMode === 'add' ? 'Добавить плейлист' : 'Поиск'))
+                .append($('<div class="iptv-kb-lang"></div>').text(keyboardLang.toUpperCase()))
+            );
+
+            right.append($('<div class="iptv-display"></div>').text(state.keyboardValue || ' '));
 
             var grid = $('<div class="iptv-keyboard"></div>');
             keyboardKeys().forEach(function (key, index) {
                 var btn = $('<div class="iptv-key"></div>').text(key);
 
-                bindHoverAction(btn, function () {
-                    state.overlayKeyIndex = index;
+                bindAction(btn, function () {
+                    state.keyIndex = index;
                     applyKey({ type: 'char', value: key });
-                    updateFocus();
                 });
 
                 grid.append(btn);
             });
-            main.append(grid);
+            right.append(grid);
 
-            var actions = $('<div class="iptv-actions"></div>');
+            var actions = $('<div class="iptv-krow"></div>');
             KEYBOARD_ACTIONS.forEach(function (action, index) {
-                var btn = $('<div class="iptv-action-btn"></div>').text(action.title);
+                var btn = $('<div class="iptv-kbtn"></div>').text(action.title);
 
-                bindHoverAction(btn, function () {
-                    state.overlayKeyIndex = keyboardKeys().length + index;
+                bindAction(btn, function () {
+                    state.keyIndex = keyboardKeys().length + index;
                     applyKey({ type: 'action', value: action.code });
-                    updateFocus();
                 });
 
                 actions.append(btn);
             });
-            main.append(actions);
+            right.append(actions);
 
             var closeBtn = $('<div class="iptv-item"></div>').text('Закрыть');
-            bindHoverAction(closeBtn, function () {
+            bindAction(closeBtn, function () {
                 closeOverlay();
             });
-            main.append(closeBtn);
+            right.append(closeBtn);
 
-            overlayScreen.append(panel, main);
+            overlay.append(left, right);
             updateFocus();
         }
 
         function renderOverlay() {
-            if (view === 'playlists') renderPlaylistsOverlay();
-            else if (view === 'keyboard') renderKeyboardOverlay();
-            else overlayScreen.addClass('iptv-hidden').empty();
+            if (view === 'playlists') renderPlaylists();
+            else if (view === 'keyboard') renderKeyboard();
+            else overlay.addClass('hidden').empty();
         }
 
-        function renderAll() {
-            renderBrowser();
-            renderOverlay();
-        }
-
-        function applyKey(token) {
-            if (token.type === 'char') {
-                state.keyboardValue += token.value;
-            } else if (token.value === 'space') {
-                state.keyboardValue += ' ';
-            } else if (token.value === 'backspace') {
-                if (state.keyboardValue.length) state.keyboardValue = state.keyboardValue.slice(0, -1);
-            } else if (token.value === 'lang') {
-                keyboardLang = keyboardLang === 'en' ? 'ru' : 'en';
-            } else if (token.value === 'submit') {
-                submitKeyboard();
-                return;
-            }
-
-            renderOverlay();
+        function closeOverlay() {
+            view = 'browser';
+            overlay.addClass('hidden').empty();
+            updateFocus();
         }
 
         function submitKeyboard() {
@@ -663,48 +625,33 @@
                 return;
             }
 
-            state.currentChannels = state.allChannels.filter(function (channel) {
+            state.currentChannels = state.channels.filter(function (channel) {
                 return channel.name.toLowerCase().indexOf(value.toLowerCase()) !== -1;
             });
             state.centerIndex = 0;
             state.rightIndex = 0;
-            closeOverlay();
             state.activeColumn = 'center';
+            closeOverlay();
             renderBrowser();
 
             if (!state.currentChannels.length) Lampa.Noty.show('Ничего не найдено');
         }
 
-        function openAddOverlay() {
-            view = 'keyboard';
-            keyboardMode = 'add';
-            keyboardLang = 'en';
-            state.keyboardTitle = 'Введите URL плейлиста';
-            state.keyboardValue = 'http://';
-            state.overlayKeyIndex = 0;
-            renderOverlay();
-        }
+        function applyKey(token) {
+            if (token.type === 'char') {
+                state.keyboardValue += token.value;
+            } else if (token.value === 'space') {
+                state.keyboardValue += ' ';
+            } else if (token.value === 'backspace') {
+                if (state.keyboardValue.length) state.keyboardValue = state.keyboardValue.slice(0, -1);
+            } else if (token.value === 'lang') {
+                keyboardLang = keyboardLang === 'en' ? 'ru' : 'en';
+            } else if (token.value === 'submit') {
+                submitKeyboard();
+                return;
+            }
 
-        function openSearchOverlay() {
-            view = 'keyboard';
-            keyboardMode = 'search';
-            keyboardLang = 'ru';
-            state.keyboardTitle = 'Поиск канала';
-            state.keyboardValue = '';
-            state.overlayKeyIndex = 0;
             renderOverlay();
-        }
-
-        function openPlaylistsOverlay() {
-            view = 'playlists';
-            state.overlayListIndex = config.currentPlaylist;
-            renderOverlay();
-        }
-
-        function closeOverlay() {
-            view = 'browser';
-            overlayScreen.addClass('iptv-hidden').empty();
-            updateFocus();
         }
 
         function removeCurrentPlaylist() {
@@ -718,10 +665,7 @@
 
             config.playlists.splice(config.currentPlaylist, 1);
 
-            if (config.currentPlaylist >= config.playlists.length) {
-                config.currentPlaylist = config.playlists.length - 1;
-            }
-
+            if (config.currentPlaylist >= config.playlists.length) config.currentPlaylist = config.playlists.length - 1;
             if (config.currentPlaylist < 0) config.currentPlaylist = 0;
 
             config.lastGroup = '⭐ Избранное';
@@ -729,35 +673,9 @@
             loadPlaylist();
         }
 
-        function selectPlaylist(index) {
-            if (index < 0 || index >= config.playlists.length) return;
-            config.currentPlaylist = index;
-            config.lastGroup = '⭐ Избранное';
-            saveConfig();
-            closeOverlay();
-            loadPlaylist();
-        }
-
-        function activateController() {
-            try {
-                Lampa.Controller.toggle(controller_name);
-            } catch (e) {}
-        }
-
-        function exitPlugin() {
-            try {
-                Lampa.Controller.toggle('menu');
-            } catch (e) {}
-
-            try {
-                Lampa.Activity.back();
-            } catch (e) {}
-        }
-
         function playSelectedChannel() {
             var channel = selectedChannel();
             var enabled = controller_name;
-            var video;
 
             if (!channel || !channel.url) {
                 Lampa.Noty.show('Канал не выбран');
@@ -770,13 +688,11 @@
                 }
             } catch (e) {}
 
-            video = {
-                title: channel.name,
-                url: channel.url
-            };
-
             try {
-                Lampa.Player.play(video);
+                Lampa.Player.play({
+                    title: channel.name,
+                    url: channel.url
+                });
             } catch (e) {
                 Lampa.Noty.show('Ошибка запуска плеера');
                 return;
@@ -798,50 +714,15 @@
             }
         }
 
-        function activateLeftItem() {
-            var item = selectedLeftItem();
-            if (!item) return;
-
-            if (item.type === 'action') {
-                if (item.action === 'open_add') openAddOverlay();
-                else if (item.action === 'open_playlists') openPlaylistsOverlay();
-                else if (item.action === 'open_search') openSearchOverlay();
-                return;
-            }
-
-            state.lastGroup = item.group;
-            applyCurrentGroup();
-            state.activeColumn = 'center';
-            renderBrowser();
-        }
-
-        function activateRightItem() {
-            var item = selectedRightItem();
-            var channel = selectedChannel();
-
-            if (!item || !channel) return;
-
-            if (item.action === 'play') playSelectedChannel();
-            else if (item.action === 'favorite') toggleFavorite(channel);
-            else if (item.action === 'remove_playlist') removeCurrentPlaylist();
-        }
-
         function ensureVisible(container, element, index) {
             if (!container || !container.length || !element || !element.length) return;
 
             var c = container[0];
             var e = element[0];
 
-            if (typeof index === 'number') {
-                if (index <= 0) {
-                    c.scrollTop = 0;
-                    return;
-                }
-
-                if (index <= 1) {
-                    c.scrollTop = 0;
-                    return;
-                }
+            if (typeof index === 'number' && index <= 1) {
+                c.scrollTop = 0;
+                return;
             }
 
             var cTop = c.scrollTop;
@@ -863,9 +744,9 @@
             leftCol.find('.iptv-item').removeClass('active');
             centerCol.find('.iptv-item').removeClass('active');
             rightCol.find('.iptv-item').removeClass('active');
-            overlayScreen.find('.iptv-item').removeClass('active');
-            overlayScreen.find('.iptv-key').removeClass('active');
-            overlayScreen.find('.iptv-action-btn').removeClass('active');
+            overlay.find('.iptv-item').removeClass('active');
+            overlay.find('.iptv-key').removeClass('active');
+            overlay.find('.iptv-kbtn').removeClass('active');
 
             if (view === 'browser') {
                 if (state.activeColumn === 'left') {
@@ -882,17 +763,16 @@
             }
 
             if (view === 'playlists') {
-                var playlistItem = overlayScreen.find('.iptv-overlay-panel .iptv-item').eq(state.overlayListIndex).addClass('active');
-                ensureVisible(overlayScreen.find('.iptv-overlay-panel'), playlistItem, state.overlayListIndex);
+                var playlistItem = overlay.find('.iptv-overlay-left .iptv-item').eq(state.overlayIndex).addClass('active');
+                ensureVisible(overlay.find('.iptv-overlay-left'), playlistItem, state.overlayIndex);
                 return;
             }
 
             if (view === 'keyboard') {
-                var keys = keyboardKeys();
-                if (state.overlayKeyIndex < keys.length) {
-                    overlayScreen.find('.iptv-key').eq(state.overlayKeyIndex).addClass('active');
+                if (state.keyIndex < keyboardKeys().length) {
+                    overlay.find('.iptv-key').eq(state.keyIndex).addClass('active');
                 } else {
-                    overlayScreen.find('.iptv-action-btn').eq(state.overlayKeyIndex - keys.length).addClass('active');
+                    overlay.find('.iptv-kbtn').eq(state.keyIndex - keyboardKeys().length).addClass('active');
                 }
             }
         }
@@ -903,56 +783,46 @@
             Lampa.Controller.add(controller_name, {
                 up: function () {
                     if (view === 'browser') {
-                        if (state.activeColumn === 'left' && state.leftIndex > 0) {
-                            state.leftIndex--;
-                            updateFocus();
-                        } else if (state.activeColumn === 'center' && state.centerIndex > 0) {
+                        if (state.activeColumn === 'left' && state.leftIndex > 0) state.leftIndex--;
+                        else if (state.activeColumn === 'center' && state.centerIndex > 0) {
                             state.centerIndex--;
                             renderRight();
-                            updateFocus();
-                        } else if (state.activeColumn === 'right' && state.rightIndex > 0) {
-                            state.rightIndex--;
-                            updateFocus();
-                        }
+                        } else if (state.activeColumn === 'right' && state.rightIndex > 0) state.rightIndex--;
+                        updateFocus();
                         return;
                     }
 
                     if (view === 'playlists') {
-                        if (state.overlayListIndex > 0) state.overlayListIndex--;
+                        if (state.overlayIndex > 0) state.overlayIndex--;
                         updateFocus();
                         return;
                     }
 
                     if (view === 'keyboard') {
-                        if (state.overlayKeyIndex >= 10) state.overlayKeyIndex -= 10;
+                        if (state.keyIndex >= 10) state.keyIndex -= 10;
                         updateFocus();
                     }
                 },
                 down: function () {
                     if (view === 'browser') {
-                        if (state.activeColumn === 'left' && state.leftIndex < state.leftItems.length - 1) {
-                            state.leftIndex++;
-                            updateFocus();
-                        } else if (state.activeColumn === 'center' && state.centerIndex < state.currentChannels.length - 1) {
+                        if (state.activeColumn === 'left' && state.leftIndex < state.leftItems.length - 1) state.leftIndex++;
+                        else if (state.activeColumn === 'center' && state.centerIndex < state.currentChannels.length - 1) {
                             state.centerIndex++;
                             renderRight();
-                            updateFocus();
-                        } else if (state.activeColumn === 'right' && state.rightIndex < state.rightItems.length - 1) {
-                            state.rightIndex++;
-                            updateFocus();
-                        }
+                        } else if (state.activeColumn === 'right' && state.rightIndex < state.rightItems.length - 1) state.rightIndex++;
+                        updateFocus();
                         return;
                     }
 
                     if (view === 'playlists') {
-                        if (state.overlayListIndex < state.playlistItems.length - 1) state.overlayListIndex++;
+                        if (state.overlayIndex < state.playlistItems.length - 1) state.overlayIndex++;
                         updateFocus();
                         return;
                     }
 
                     if (view === 'keyboard') {
-                        var next = state.overlayKeyIndex + 10;
-                        if (next < keyCount()) state.overlayKeyIndex = next;
+                        var next = state.keyIndex + 10;
+                        if (next < keyCount()) state.keyIndex = next;
                         updateFocus();
                     }
                 },
@@ -963,19 +833,17 @@
                             updateFocus();
                             return;
                         }
-
                         if (state.activeColumn === 'center') {
                             state.activeColumn = 'left';
                             updateFocus();
                             return;
                         }
-
                         exitPlugin();
                         return;
                     }
 
                     if (view === 'keyboard') {
-                        if (state.overlayKeyIndex > 0) state.overlayKeyIndex--;
+                        if (state.keyIndex > 0) state.keyIndex--;
                         updateFocus();
                     }
                 },
@@ -983,11 +851,8 @@
                     if (view === 'browser') {
                         if (state.activeColumn === 'left') {
                             var item = selectedLeftItem();
-                            if (item && item.type === 'group') {
-                                state.activeColumn = 'center';
-                            } else {
-                                activateLeftItem();
-                            }
+                            if (item && item.type === 'group') state.activeColumn = 'center';
+                            else activateLeftItem();
                         } else if (state.activeColumn === 'center') {
                             if (state.currentChannels.length) state.activeColumn = 'right';
                         }
@@ -996,7 +861,7 @@
                     }
 
                     if (view === 'keyboard') {
-                        if (state.overlayKeyIndex < keyCount() - 1) state.overlayKeyIndex++;
+                        if (state.keyIndex < keyCount() - 1) state.keyIndex++;
                         updateFocus();
                     }
                 },
@@ -1006,23 +871,28 @@
                         else if (state.activeColumn === 'center') {
                             if (state.currentChannels.length) state.activeColumn = 'right';
                         } else if (state.activeColumn === 'right') activateRightItem();
-
                         updateFocus();
                         return;
                     }
 
                     if (view === 'playlists') {
-                        var playlistItem = selectedPlaylistItem();
-                        if (playlistItem) selectPlaylist(playlistItem.index);
+                        var item = selectedPlaylistItem();
+                        if (item) {
+                            config.currentPlaylist = item.index;
+                            config.lastGroup = '⭐ Избранное';
+                            saveConfig();
+                            closeOverlay();
+                            loadPlaylist();
+                        }
                         return;
                     }
 
                     if (view === 'keyboard') {
-                        var token = state.overlayKeyIndex < keyboardKeys().length
-                            ? { type: 'char', value: keyboardKeys()[state.overlayKeyIndex] }
-                            : { type: 'action', value: KEYBOARD_ACTIONS[state.overlayKeyIndex - keyboardKeys().length].code };
-
-                        applyKey(token);
+                        if (state.keyIndex < keyboardKeys().length) {
+                            applyKey({ type: 'char', value: keyboardKeys()[state.keyIndex] });
+                        } else {
+                            applyKey({ type: 'action', value: KEYBOARD_ACTIONS[state.keyIndex - keyboardKeys().length].code });
+                        }
                     }
                 },
                 back: function () {
@@ -1049,17 +919,15 @@
                     if (view === 'playlists') {
                         var pl = selectedPlaylistItem();
                         if (!pl) return;
-
                         var target = config.playlists[pl.index];
+
                         if (!target || target.locked || config.playlists.length <= 1) {
                             Lampa.Noty.show('Этот плейлист нельзя удалить');
                             return;
                         }
 
                         config.playlists.splice(pl.index, 1);
-                        if (config.currentPlaylist >= config.playlists.length) {
-                            config.currentPlaylist = config.playlists.length - 1;
-                        }
+                        if (config.currentPlaylist >= config.playlists.length) config.currentPlaylist = config.playlists.length - 1;
                         if (config.currentPlaylist < 0) config.currentPlaylist = 0;
                         saveConfig();
                         buildPlaylistItems();
@@ -1088,18 +956,17 @@
             ensureStyles();
 
             root = $('<div class="iptv-root"></div>');
-            mainScreen = $('<div class="iptv-main"></div>');
-            overlayScreen = $('<div class="iptv-overlay iptv-hidden"></div>');
+            layout = $('<div class="iptv-layout"></div>');
+            overlay = $('<div class="iptv-overlay hidden"></div>');
 
             leftCol = $('<div class="iptv-col iptv-left"></div>');
             centerCol = $('<div class="iptv-col iptv-center"></div>');
             rightCol = $('<div class="iptv-col iptv-right"></div>');
 
-            mainScreen.append(leftCol, centerCol, rightCol);
-            root.append(mainScreen, overlayScreen);
+            layout.append(leftCol, centerCol, rightCol);
+            root.append(layout, overlay);
 
             loadPlaylist();
-
             return root;
         };
 
@@ -1125,11 +992,11 @@
     }
 
     function init() {
-        Lampa.Component.add('iptv_tv_rebuild', IPTVTvComponent);
+        Lampa.Component.add('iptv_universal', IPTVUniversal);
 
-        if ($('.menu .menu__list').find('.iptv-tv-rebuild-item').length) return;
+        if ($('.menu .menu__list').find('.iptv-universal-item').length) return;
 
-        var item = $('<li class="menu__item selector iptv-tv-rebuild-item"></li>');
+        var item = $('<li class="menu__item selector iptv-universal-item"></li>');
         item.append($('<div class="menu__text"></div>').text('IPTV PRO'));
 
         item.on('hover:enter hover:click hover:touch', function (e) {
@@ -1137,7 +1004,7 @@
             e.stopPropagation();
             Lampa.Activity.push({
                 title: 'IPTV',
-                component: 'iptv_tv_rebuild'
+                component: 'iptv_universal'
             });
         });
 
