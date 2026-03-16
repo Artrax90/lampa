@@ -1,13 +1,13 @@
 // ==Lampa==
 // name: IPTV PRO TV Rebuild
-// version: 2.1.1
+// version: 2.2.0
 // ==/Lampa==
 
 (function () {
     'use strict';
 
     function IPTVTvComponent() {
-        var storage_key = 'iptv_tv_rebuild_v211';
+        var storage_key = 'iptv_tv_rebuild_v220';
         var controller_name = 'iptv_tv_rebuild';
         var root, mainScreen, overlayScreen, leftCol, centerCol, rightCol;
 
@@ -17,9 +17,9 @@
 
         var playerWasOpened = false;
         var controllerReady = false;
-        var restoreTimer = 0;
+        var restoreInterval = 0;
         var restoreAttempts = 0;
-        var maxRestoreAttempts = 12;
+        var maxRestoreAttempts = 20;
 
         var config = loadConfig();
 
@@ -202,10 +202,10 @@
 
             $('head').append(
                 '<style id="iptv-tv-rebuild-style">' +
-                '.iptv-root{position:fixed;top:0;left:0;right:0;bottom:0;z-index:1000;background:#0b0d10;color:#fff;padding-top:5rem;font-size:1.05em;}' +
+                '.iptv-root{position:fixed;top:0;left:0;right:0;bottom:0;z-index:1000;background:#0b0d10;color:#fff;padding-top:5rem;font-size:1.05em;overflow:hidden;}' +
                 '.iptv-hidden{display:none!important;}' +
                 '.iptv-main{display:flex;width:100%;height:100%;}' +
-                '.iptv-col{height:100%;overflow-y:auto;box-sizing:border-box;border-right:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.02);}' +
+                '.iptv-col{height:100%;overflow-y:auto;overflow-x:hidden;box-sizing:border-box;border-right:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.02);scroll-behavior:auto;-webkit-overflow-scrolling:touch;}' +
                 '.iptv-left{width:24rem;}' +
                 '.iptv-center{flex:1;}' +
                 '.iptv-right{width:27rem;padding:2rem;border-right:none;background:#080a0d;}' +
@@ -217,7 +217,7 @@
                 '.iptv-title{font-size:1.5rem;font-weight:700;margin-bottom:1rem;word-break:break-word;}' +
                 '.iptv-meta{opacity:0.8;margin-bottom:1rem;}' +
                 '.iptv-url{opacity:0.6;margin-bottom:1.5rem;word-break:break-all;font-size:0.9rem;}' +
-                '.iptv-overlay{position:absolute;top:5rem;left:0;right:0;bottom:0;background:#0b0d10;display:flex;}' +
+                '.iptv-overlay{position:absolute;top:5rem;left:0;right:0;bottom:0;background:#0b0d10;display:flex;overflow:hidden;}' +
                 '.iptv-overlay-panel{width:28rem;border-right:1px solid rgba(255,255,255,0.08);overflow-y:auto;background:rgba(255,255,255,0.03);}' +
                 '.iptv-overlay-main{flex:1;padding:2rem;overflow-y:auto;}' +
                 '.iptv-display{padding:1rem;border-radius:0.5rem;background:rgba(255,255,255,0.06);word-break:break-all;margin-bottom:1.5rem;min-height:3.2rem;}' +
@@ -663,10 +663,10 @@
             loadPlaylist();
         }
 
-        function clearRestoreTimer() {
-            if (restoreTimer) {
-                clearTimeout(restoreTimer);
-                restoreTimer = 0;
+        function clearRestoreInterval() {
+            if (restoreInterval) {
+                clearInterval(restoreInterval);
+                restoreInterval = 0;
             }
         }
 
@@ -674,6 +674,45 @@
             try {
                 Lampa.Controller.toggle(controller_name);
             } catch (e) {}
+        }
+
+        function rebuildController() {
+            try {
+                Lampa.Controller.remove(controller_name);
+            } catch (e) {}
+
+            controllerReady = false;
+            addController();
+            activateController();
+            updateFocus();
+        }
+
+        function scheduleControllerRestore() {
+            if (!playerWasOpened) return;
+
+            clearRestoreInterval();
+            restoreAttempts = 0;
+
+            restoreInterval = setInterval(function () {
+                if (!root || !root.parent().length) {
+                    clearRestoreInterval();
+                    return;
+                }
+
+                restoreAttempts++;
+                rebuildController();
+
+                if (restoreAttempts >= maxRestoreAttempts) {
+                    playerWasOpened = false;
+                    clearRestoreInterval();
+                }
+            }, 500);
+        }
+
+        function stopControllerRestore() {
+            playerWasOpened = false;
+            restoreAttempts = 0;
+            clearRestoreInterval();
         }
 
         function playSelectedChannel() {
@@ -686,7 +725,7 @@
 
             playerWasOpened = true;
             restoreAttempts = 0;
-            clearRestoreTimer();
+            clearRestoreInterval();
 
             try {
                 Lampa.Controller.toggle('');
@@ -726,6 +765,25 @@
             else if (item.action === 'remove_playlist') removeCurrentPlaylist();
         }
 
+        function ensureVisible(container, element) {
+            if (!container || !container.length || !element || !element.length) return;
+
+            var c = container[0];
+            var e = element[0];
+
+            var cTop = c.scrollTop;
+            var cHeight = c.clientHeight;
+            var eTop = e.offsetTop;
+            var eHeight = e.offsetHeight;
+            var margin = 12;
+
+            if (eTop < cTop + margin) {
+                c.scrollTop = Math.max(0, eTop - margin);
+            } else if (eTop + eHeight > cTop + cHeight - margin) {
+                c.scrollTop = eTop + eHeight - cHeight + margin;
+            }
+        }
+
         function updateFocus() {
             if (!root) return;
 
@@ -738,17 +796,21 @@
 
             if (view === 'browser') {
                 if (state.activeColumn === 'left') {
-                    leftCol.find('.iptv-item').eq(state.leftIndex).addClass('active');
+                    var leftItem = leftCol.find('.iptv-item').eq(state.leftIndex).addClass('active');
+                    ensureVisible(leftCol, leftItem);
                 } else if (state.activeColumn === 'center') {
-                    centerCol.find('.iptv-item').eq(state.centerIndex).addClass('active');
+                    var centerItem = centerCol.find('.iptv-item').eq(state.centerIndex).addClass('active');
+                    ensureVisible(centerCol, centerItem);
                 } else if (state.activeColumn === 'right') {
-                    rightCol.find('.iptv-item').eq(state.rightIndex).addClass('active');
+                    var rightItem = rightCol.find('.iptv-item').eq(state.rightIndex).addClass('active');
+                    ensureVisible(rightCol, rightItem);
                 }
                 return;
             }
 
             if (view === 'playlists') {
-                overlayScreen.find('.iptv-overlay-panel .iptv-item').eq(state.overlayListIndex).addClass('active');
+                var playlistItem = overlayScreen.find('.iptv-overlay-panel .iptv-item').eq(state.overlayListIndex).addClass('active');
+                ensureVisible(overlayScreen.find('.iptv-overlay-panel'), playlistItem);
                 return;
             }
 
@@ -767,6 +829,8 @@
 
             Lampa.Controller.add(controller_name, {
                 up: function () {
+                    stopControllerRestore();
+
                     if (view === 'browser') {
                         if (state.activeColumn === 'left' && state.leftIndex > 0) {
                             state.leftIndex--;
@@ -799,6 +863,8 @@
                     }
                 },
                 down: function () {
+                    stopControllerRestore();
+
                     if (view === 'browser') {
                         if (state.activeColumn === 'left' && state.leftIndex < state.leftItems.length - 1) {
                             state.leftIndex++;
@@ -832,6 +898,8 @@
                     }
                 },
                 left: function () {
+                    stopControllerRestore();
+
                     if (view === 'browser') {
                         if (state.activeColumn === 'right') state.activeColumn = 'center';
                         else if (state.activeColumn === 'center') state.activeColumn = 'left';
@@ -846,6 +914,8 @@
                     }
                 },
                 right: function () {
+                    stopControllerRestore();
+
                     if (view === 'browser') {
                         if (state.activeColumn === 'left') {
                             var item = selectedLeftItem();
@@ -864,6 +934,8 @@
                     }
                 },
                 enter: function () {
+                    stopControllerRestore();
+
                     if (view === 'browser') {
                         if (state.activeColumn === 'left') activateLeftItem();
                         else if (state.activeColumn === 'center') {
@@ -885,6 +957,8 @@
                     }
                 },
                 back: function () {
+                    stopControllerRestore();
+
                     if (view !== 'browser') {
                         closeOverlay();
                         return;
@@ -905,6 +979,8 @@
                     Lampa.Activity.back();
                 },
                 menu: function () {
+                    stopControllerRestore();
+
                     if (view === 'playlists') {
                         var pl = selectedPlaylistItem();
                         if (!pl) return;
@@ -941,37 +1017,6 @@
             });
 
             controllerReady = true;
-        }
-
-        function rebuildController() {
-            try {
-                Lampa.Controller.remove(controller_name);
-            } catch (e) {}
-
-            controllerReady = false;
-            addController();
-            activateController();
-            updateFocus();
-        }
-
-        function scheduleControllerRestore() {
-            if (!playerWasOpened) return;
-
-            clearRestoreTimer();
-
-            restoreTimer = setTimeout(function () {
-                if (!root || !root.parent().length) return;
-
-                restoreAttempts++;
-                rebuildController();
-
-                if (restoreAttempts < maxRestoreAttempts && playerWasOpened) {
-                    scheduleControllerRestore();
-                } else {
-                    playerWasOpened = false;
-                    restoreAttempts = 0;
-                }
-            }, 350);
         }
 
         function bindPlayerReturn() {
@@ -1011,9 +1056,7 @@
         };
 
         this.start = function () {
-            clearRestoreTimer();
-            playerWasOpened = false;
-            restoreAttempts = 0;
+            stopControllerRestore();
             addController();
             activateController();
             updateFocus();
@@ -1027,7 +1070,7 @@
         };
 
         this.destroy = function () {
-            clearRestoreTimer();
+            stopControllerRestore();
 
             try {
                 Lampa.Controller.remove(controller_name);
