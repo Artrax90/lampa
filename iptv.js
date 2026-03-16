@@ -515,7 +515,7 @@
             ];
 
             tabs.forEach(function (tab) {
-                var btn = $('<div class="iptv-tab"></div>').text(tab.title);
+                var btn = $('<div class="iptv-tab"></div>').attr('data-tab', tab.key).text(tab.title);
                 if (state.mobileTab === tab.key) btn.addClass('active');
 
                 bindAction(btn, 'tab:' + tab.key, function () {
@@ -597,7 +597,7 @@
                 return;
             }
 
-            rightCol.append($('<div class="iptv-title"></div>').text(channel.name)));
+            rightCol.append($('<div class="iptv-title"></div>').text(channel.name));
             rightCol.append($('<div class="iptv-meta"></div>').text('Группа: ' + channel.group));
             rightCol.append($('<div class="iptv-url"></div>').text(channel.url));
 
@@ -923,10 +923,12 @@
             overlay.find('.iptv-item').removeClass('active');
             overlay.find('.iptv-key').removeClass('active');
             overlay.find('.iptv-kbtn').removeClass('active');
-            mobileTabs.find('.iptv-tab').removeClass('active');
 
-            if (isMobileLayout()) {
-                mobileTabs.find('.iptv-tab[data-tab="' + state.mobileTab + '"]').addClass('active');
+            if (mobileTabs) {
+                mobileTabs.find('.iptv-tab').removeClass('active');
+                if (isMobileLayout()) {
+                    mobileTabs.find('.iptv-tab[data-tab="' + state.mobileTab + '"]').addClass('active');
+                }
             }
 
             if (view === 'browser') {
@@ -1235,20 +1237,6 @@
 
             layout.append(leftCol, centerCol, rightCol);
             root.append(mobileTabs, layout, overlay, debugBox);
-
-            ['left', 'center', 'right'].forEach(function (tabKey) {
-                var title = tabKey === 'left' ? 'Группы' : tabKey === 'center' ? 'Каналы' : 'Инфо';
-                var tab = $('<div class="iptv-tab"></div>').attr('data-tab', tabKey).text(title);
-
-                bindAction(tab, 'mobileTab:' + tabKey, function () {
-                    state.mobileTab = tabKey;
-                    state.activeColumn = tabKey;
-                    applyMobileTabVisibility();
-                    updateFocus();
-                });
-
-                mobileTabs.append(tab);
-            });
 
             runSafe('create.loadPlaylist', function () {
                 loadPlaylist();
