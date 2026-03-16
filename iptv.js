@@ -1,13 +1,13 @@
 // ==Lampa==
 // name: IPTV PRO Universal Debug
-// version: 3.0.4
+// version: 3.0.5
 // ==/Lampa==
 
 (function () {
     'use strict';
 
     function IPTVUniversalDebug() {
-        var storage_key = 'iptv_universal_debug_v304';
+        var storage_key = 'iptv_universal_debug_v305';
         var controller_name = 'iptv_universal_debug';
 
         var root;
@@ -23,8 +23,11 @@
         var keyboardMode = 'add'; // add | search
         var keyboardLang = 'en';
         var controllerReady = false;
+
         var lastActionTag = '';
         var lastActionAt = 0;
+        var lastTouchTag = '';
+        var lastTouchAt = 0;
 
         var config = loadConfig();
 
@@ -84,6 +87,11 @@
                         name: 'RU IPTV Org',
                         url: 'https://iptv-org.github.io/iptv/countries/ru.m3u',
                         locked: true
+                    },
+                    {
+                        name: 'PRISMA',
+                        url: 'https://gist.axenov.dev/PRISMA/f332731d327f41149cbfcecefeda4591/download/HEAD/PRISMA.m3u',
+                        locked: true
                     }
                 ],
                 favorites: [],
@@ -118,6 +126,7 @@
 
             ensureBuiltinPlaylist(raw.playlists, def.playlists[0]);
             ensureBuiltinPlaylist(raw.playlists, def.playlists[1]);
+            ensureBuiltinPlaylist(raw.playlists, def.playlists[2]);
 
             if (!Array.isArray(raw.favorites)) raw.favorites = [];
 
@@ -153,11 +162,13 @@
                 }
             }
 
-            if (!exists) playlists.push({
-                name: builtin.name,
-                url: builtin.url,
-                locked: true
-            });
+            if (!exists) {
+                playlists.push({
+                    name: builtin.name,
+                    url: builtin.url,
+                    locked: true
+                });
+            }
         }
 
         function saveConfig() {
@@ -212,6 +223,15 @@
                 return fn();
             } catch (err) {
                 showDebug(tag, err);
+            }
+        }
+
+        function notify(text) {
+            try {
+                if (Lampa.Noty && Lampa.Noty.show) Lampa.Noty.show(text);
+                else showDebug('notify', text);
+            } catch (e) {
+                showDebug('notify', e);
             }
         }
 
@@ -283,15 +303,6 @@
             return keyboardKeys().length + KEYBOARD_ACTIONS.length;
         }
 
-        function notify(text) {
-            try {
-                if (Lampa.Noty && Lampa.Noty.show) Lampa.Noty.show(text);
-                else showDebug('notify', text);
-            } catch (e) {
-                showDebug('notify', e);
-            }
-        }
-
         function ensureStyles() {
             if ($('#iptv-universal-debug-style').length) return;
 
@@ -340,44 +351,40 @@
             );
         }
 
-        function bindAction(el, tag, handler) {
-            var touchStamp = 0;
+        function shouldSkipAction(tag, type) {
+            var now = Date.now();
+            var isTouchLike = type === 'touchend' || type === 'hover:touch';
+            var isClickLike = type === 'click' || type === 'hover:click';
 
+            if (tag === lastActionTag && now - lastActionAt < 650) {
+                return true;
+            }
+
+            if (isClickLike && tag === lastTouchTag && now - lastTouchAt < 900) {
+                return true;
+            }
+
+            if (isTouchLike) {
+                lastTouchTag = tag;
+                lastTouchAt = now;
+            }
+
+            lastActionTag = tag;
+            lastActionAt = now;
+
+            return false;
+        }
+
+        function bindAction(el, tag, handler) {
             el.addClass('selector');
 
             el.on('hover:enter hover:click hover:touch click touchend', function (e) {
-                var now = Date.now();
                 var type = e.type || '';
-                var isTouchLike = type === 'touchend' || type === 'hover:touch';
-                var isClickLike = type === 'click' || type === 'hover:click';
 
-                if (isTouchLike) {
-                    if (lastActionTag === tag && now - lastActionAt < 450) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        return;
-                    }
-
-                    touchStamp = now;
-                    lastActionTag = tag;
-                    lastActionAt = now;
-                }
-
-                if (isClickLike && now - touchStamp < 500) {
+                if (shouldSkipAction(tag, type)) {
                     e.preventDefault();
                     e.stopPropagation();
                     return;
-                }
-
-                if (!isTouchLike && !isClickLike && lastActionTag === tag && now - lastActionAt < 250) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    return;
-                }
-
-                if (!isTouchLike) {
-                    lastActionTag = tag;
-                    lastActionAt = now;
                 }
 
                 e.preventDefault();
