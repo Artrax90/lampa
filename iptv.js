@@ -1,13 +1,13 @@
 // ==Lampa==
 // name: IPTV PRO Universal
-// version: 4.0.5
+// version: 4.0.6
 // ==/Lampa==
 
 (function () {
     'use strict';
 
     function IPTVUniversal() {
-        var storage_key = 'iptv_universal_v405';
+        var storage_key = 'iptv_universal_v406';
         var controller_name = 'iptv_universal';
 
         var root;
@@ -39,44 +39,108 @@
             'bridge tv classic': { epg: 'bridge-classic' },
 
             'первый канал': { epg: 'perviy-kanal' },
+            'первый канал hd': { epg: 'perviy-kanal' },
+            'первый канал европа': { epg: 'perviy-kanal' },
+            'первый канал +4': { epg: 'perviy-kanal' },
             'первый': { epg: 'perviy-kanal' },
+
             'россия 1': { epg: 'rossiya-1' },
+            'россия 1 hd': { epg: 'rossiya-1' },
             'россия1': { epg: 'rossiya-1' },
-            'россия 24': { epg: 'rossiya-24' },
-            'россия24': { epg: 'rossiya-24' },
+
+            'rtr planeta': { epg: 'rtr-planeta' },
+            'ртр планета': { epg: 'rtr-planeta' },
+            'ртр планета азия': { epg: 'rtr-planeta-azia' },
+            'rtr planeta azia': { epg: 'rtr-planeta-azia' },
+
             'россия культура': { epg: 'rossiya-k' },
+            'россия культура hd': { epg: 'rossiya-k' },
             'россия к': { epg: 'rossiya-k' },
             'культура': { epg: 'rossiya-k' },
+
+            'первый российский национальный канал': { epg: 'prnk-tv' },
+            'первый российский национальный канал hd': { epg: 'prnk-tv' },
+
+            'матч': { epg: 'match-tv' },
+            'матч тв': { epg: 'match-tv' },
+            'матч!': { epg: 'match-tv' },
+            'match tv': { epg: 'match-tv' },
+
             'нтв': { epg: 'ntv' },
-            'тнт': { epg: 'tnt' },
-            'стс': { epg: 'sts' },
-            'домашний': { epg: 'domashniy' },
+            'нтв hd': { epg: 'ntv' },
+            'нтв мир': { epg: 'ntv-mir' },
+            'нтв стиль': { epg: 'ntv-style' },
+            'нтв право': { epg: 'ntv-pravo' },
+            'нтв хит': { epg: 'ntv-xit' },
+            'нтв сериал': { epg: 'ntv-serial' },
+
+            'пятый канал': { epg: '5kanal' },
+            'пятый канал int': { epg: '5kanal-ru-pl2' },
+            'пятый канал international': { epg: '5kanal-ru-pl2' },
+
+            '8 канал россия': { epg: '8kanal-ru' },
+            '8 канал европа': { epg: '8kanal-eu' },
+
+            'отр': { epg: 'otr' },
+
+            'твц': { epg: 'tvc' },
+            'тв центр': { epg: 'tvc' },
+            'тв центр hd': { epg: 'tvc' },
+
             'рен тв': { epg: 'ren-tv' },
+            'рен тв hd': { epg: 'ren-tv' },
             'рентв': { epg: 'ren-tv' },
+            'rentv': { epg: 'ren-tv' },
             'ren tv': { epg: 'ren-tv' },
-            'тв 3': { epg: 'tv-3' },
+            'рен тв international': { epg: 'ren-tv' },
+
+            'стс': { epg: 'sts' },
+            'стс hd': { epg: 'sts' },
+            'стс international': { epg: 'sts' },
+
+            'домашний': { epg: 'domashniy' },
+            'домашний hd': { epg: 'domashniy' },
+
             'тв3': { epg: 'tv-3' },
+            'тв 3': { epg: 'tv-3' },
             'tv 3': { epg: 'tv-3' },
+            'тв3 hd': { epg: 'tv-3' },
+
             'пятница': { epg: 'pyatnica' },
             'пятница!': { epg: 'pyatnica' },
-            'звезда': { epg: 'zvezda' },
-            'матч тв': { epg: 'match-tv' },
-            'match tv': { epg: 'match-tv' },
-            'карусель': { epg: 'karusel' },
-            'муз тв': { epg: 'muz-tv' },
-            'muz tv': { epg: 'muz-tv' },
-            'ю': { epg: 'u-tv' },
-            'канал ю': { epg: 'u-tv' },
-            'че': { epg: 'che' },
-            'че!': { epg: 'che' },
-            'мир': { epg: 'mir' },
-            'мир 24': { epg: 'mir-24' },
-            'отр': { epg: 'otr' },
-            'спас': { epg: 'spas' },
-            'суббота': { epg: 'subbota' },
-            'дисней': { epg: 'disney-channel' },
-            'disney': { epg: 'disney-channel' },
+            'пятница hd': { epg: 'pyatnica' },
+            'пятница! hd': { epg: 'pyatnica' },
+            'пятница international': { epg: 'pyatnica' },
 
+            'звезда': { epg: 'zvezda' },
+            'звезда hd': { epg: 'zvezda' },
+            'звезда плюс': { epg: 'zvezda-plus' },
+            'звезда плюс hd': { epg: 'zvezda-plus' },
+
+            'мир': { epg: 'mir' },
+            'мир hd': { epg: 'mir' },
+            'мир international': { epg: 'mir-kz' },
+
+            'тнт': { epg: 'tnt' },
+            'тнт hd': { epg: 'tnt' },
+            'тнт international': { epg: 'tnt' },
+            'тнт international снг': { epg: 'tnt' },
+
+            'муз тв': { epg: 'muz-tv' },
+            'муз тв hd': { epg: 'muz-tv' },
+            'muz tv': { epg: 'muz-tv' },
+
+            'новости 360': { epg: '360-novosti' },
+            '360 новости': { epg: '360-novosti' },
+            '360 новости hd': { epg: '360-novosti' },
+
+            'rtvi': { epg: 'rtvi' },
+            'рбк': { epg: 'rbk' },
+            'рбк hd': { epg: 'rbk' },
+            'россия 24': { epg: 'rossiya-24' },
+            'обком': { epg: 'obkom' },
+
+            'муз tv': { epg: 'muz-tv' },
             'record russian hits': { epg: 'record-russian-hits' },
             'record супердискотека 90х': { epg: 'record-superdiskoteka-90x' },
             'record trance': { epg: 'record-trance' },
@@ -553,7 +617,6 @@
 
             id = channel.id || '';
             if (id && epg.programsById[id]) return epg.programsById[id];
-
             if (meta && meta.epg && epg.programsById[meta.epg]) return epg.programsById[meta.epg];
 
             names = [
