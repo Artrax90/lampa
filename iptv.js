@@ -1,13 +1,13 @@
 // ==Lampa==
 // name: IPTV PRO Universal Debug
-// version: 3.0.5
+// version: 3.0.6
 // ==/Lampa==
 
 (function () {
     'use strict';
 
     function IPTVUniversalDebug() {
-        var storage_key = 'iptv_universal_debug_v305';
+        var storage_key = 'iptv_universal_debug_v306';
         var controller_name = 'iptv_universal_debug';
 
         var root;
@@ -23,11 +23,6 @@
         var keyboardMode = 'add'; // add | search
         var keyboardLang = 'en';
         var controllerReady = false;
-
-        var lastActionTag = '';
-        var lastActionAt = 0;
-        var lastTouchTag = '';
-        var lastTouchAt = 0;
 
         var config = loadConfig();
 
@@ -351,42 +346,9 @@
             );
         }
 
-        function shouldSkipAction(tag, type) {
-            var now = Date.now();
-            var isTouchLike = type === 'touchend' || type === 'hover:touch';
-            var isClickLike = type === 'click' || type === 'hover:click';
-
-            if (tag === lastActionTag && now - lastActionAt < 650) {
-                return true;
-            }
-
-            if (isClickLike && tag === lastTouchTag && now - lastTouchAt < 900) {
-                return true;
-            }
-
-            if (isTouchLike) {
-                lastTouchTag = tag;
-                lastTouchAt = now;
-            }
-
-            lastActionTag = tag;
-            lastActionAt = now;
-
-            return false;
-        }
-
         function bindAction(el, tag, handler) {
             el.addClass('selector');
-
-            el.on('hover:enter hover:click hover:touch click touchend', function (e) {
-                var type = e.type || '';
-
-                if (shouldSkipAction(tag, type)) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    return;
-                }
-
+            el.on('hover:enter hover:click hover:touch', function (e) {
                 e.preventDefault();
                 e.stopPropagation();
                 runSafe(tag, handler);
@@ -1367,7 +1329,7 @@
             var item = $('<li class="menu__item selector iptv-universal-debug-item"></li>');
             item.append($('<div class="menu__text"></div>').text('IPTV PRO DEBUG'));
 
-            item.on('hover:enter hover:click hover:touch click touchend', function (e) {
+            item.on('hover:enter hover:click hover:touch', function (e) {
                 e.preventDefault();
                 e.stopPropagation();
 
