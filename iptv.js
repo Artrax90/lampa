@@ -1,13 +1,13 @@
 // ==Lampa==
 // name: IPTV PRO Universal
-// version: 4.0.4
+// version: 4.0.5
 // ==/Lampa==
 
 (function () {
     'use strict';
 
     function IPTVUniversal() {
-        var storage_key = 'iptv_universal_v404';
+        var storage_key = 'iptv_universal_v405';
         var controller_name = 'iptv_universal';
 
         var root;
@@ -25,68 +25,65 @@
 
         var config = loadConfig();
 
-        var IPTVX_ALIAS_MAP = {
-            'bridge tv': ['bridge-tv'],
-            'bridge tv hits': ['bridge-tv-dance'],
-            'bridge tv dance': ['bridge-tv-dance'],
-            'bridge tv русский хит': ['bridge-tv-ruxit'],
-            'bridge tv russkiy hit': ['bridge-tv-ruxit'],
-            'bridge tv fresh': ['bridge-tv-fresh'],
-            'bridge tv фрэш': ['bridge-tv-fresh'],
-            'bridge tv шлягер': ['bridge-tv-shlager'],
-            'bridge tv shlager': ['bridge-tv-shlager'],
-            'bridge classic': ['bridge-classic'],
-            'bridge tv classic': ['bridge-classic'],
-            'муз тв': ['muz-tv'],
-            'muz tv': ['muz-tv'],
-            'первый канал': ['perviy-kanal'],
-            'первый': ['perviy-kanal'],
-            'россия 1': ['rossiya-1'],
-            'россия1': ['rossiya-1'],
-            'россия 24': ['rossiya-24'],
-            'россия24': ['rossiya-24'],
-            'россия к': ['rossiya-k'],
-            'россия культура': ['rossiya-k'],
-            'культура': ['rossiya-k'],
-            'нтв': ['ntv'],
-            'тнт': ['tnt'],
-            'стс': ['sts'],
-            'домашний': ['domashniy'],
-            'рен тв': ['ren-tv'],
-            'рентв': ['ren-tv'],
-            'ren tv': ['ren-tv'],
-            'тв 3': ['tv-3'],
-            'тв3': ['tv-3'],
-            'tv 3': ['tv-3'],
-            'пятница': ['pyatnica'],
-            'пятница!': ['pyatnica'],
-            'пятница! hd': ['pyatnica'],
-            'звезда': ['zvezda'],
-            'ю': ['u-tv'],
-            'u': ['u-tv'],
-            'канал ю': ['u-tv'],
-            'матч тв': ['match-tv'],
-            'match tv': ['match-tv'],
-            'карусель': ['karusel'],
-            'че': ['che'],
-            'че!': ['che'],
-            'disney': ['disney-channel'],
-            'дисней': ['disney-channel'],
-            'суббота': ['subbota'],
-            'спас': ['spas'],
-            'мир': ['mir'],
-            'мир 24': ['mir-24'],
-            'отр': ['otr'],
-            'ртр планета': ['rtr-planeta'],
-            'rtvi': ['rtvi'],
-            'euromusic': ['euromusic'],
-            'ru tv': ['ru-tv'],
-            'рутв': ['ru-tv'],
-            'ru tv hd': ['ru-tv'],
-            'record russian hits': ['record-russian-hits'],
-            'record супердискотека 90х': ['record-superdiskoteka-90x'],
-            'record trance': ['record-trance'],
-            'record megamix': ['record-megamix']
+        var MANUAL_CHANNEL_MAP = {
+            'bridge tv': { epg: 'bridge-tv' },
+            'bridge tv hits': { epg: 'bridge-tv-dance' },
+            'bridge tv dance': { epg: 'bridge-tv-dance' },
+            'bridge tv русский хит': { epg: 'bridge-tv-ruxit' },
+            'bridge tv russkiy hit': { epg: 'bridge-tv-ruxit' },
+            'bridge tv фрэш': { epg: 'bridge-tv-fresh' },
+            'bridge tv fresh': { epg: 'bridge-tv-fresh' },
+            'bridge tv шлягер': { epg: 'bridge-tv-shlager' },
+            'bridge tv shlager': { epg: 'bridge-tv-shlager' },
+            'bridge classic': { epg: 'bridge-classic' },
+            'bridge tv classic': { epg: 'bridge-classic' },
+
+            'первый канал': { epg: 'perviy-kanal' },
+            'первый': { epg: 'perviy-kanal' },
+            'россия 1': { epg: 'rossiya-1' },
+            'россия1': { epg: 'rossiya-1' },
+            'россия 24': { epg: 'rossiya-24' },
+            'россия24': { epg: 'rossiya-24' },
+            'россия культура': { epg: 'rossiya-k' },
+            'россия к': { epg: 'rossiya-k' },
+            'культура': { epg: 'rossiya-k' },
+            'нтв': { epg: 'ntv' },
+            'тнт': { epg: 'tnt' },
+            'стс': { epg: 'sts' },
+            'домашний': { epg: 'domashniy' },
+            'рен тв': { epg: 'ren-tv' },
+            'рентв': { epg: 'ren-tv' },
+            'ren tv': { epg: 'ren-tv' },
+            'тв 3': { epg: 'tv-3' },
+            'тв3': { epg: 'tv-3' },
+            'tv 3': { epg: 'tv-3' },
+            'пятница': { epg: 'pyatnica' },
+            'пятница!': { epg: 'pyatnica' },
+            'звезда': { epg: 'zvezda' },
+            'матч тв': { epg: 'match-tv' },
+            'match tv': { epg: 'match-tv' },
+            'карусель': { epg: 'karusel' },
+            'муз тв': { epg: 'muz-tv' },
+            'muz tv': { epg: 'muz-tv' },
+            'ю': { epg: 'u-tv' },
+            'канал ю': { epg: 'u-tv' },
+            'че': { epg: 'che' },
+            'че!': { epg: 'che' },
+            'мир': { epg: 'mir' },
+            'мир 24': { epg: 'mir-24' },
+            'отр': { epg: 'otr' },
+            'спас': { epg: 'spas' },
+            'суббота': { epg: 'subbota' },
+            'дисней': { epg: 'disney-channel' },
+            'disney': { epg: 'disney-channel' },
+
+            'record russian hits': { epg: 'record-russian-hits' },
+            'record супердискотека 90х': { epg: 'record-superdiskoteka-90x' },
+            'record trance': { epg: 'record-trance' },
+            'record megamix': { epg: 'record-megamix' },
+            'ru tv': { epg: 'ru-tv' },
+            'рутв': { epg: 'ru-tv' },
+            'euromusic': { epg: 'euromusic' }
         };
 
         var state = {
@@ -376,12 +373,8 @@
 
         function selectedChannel() {
             if (!state.currentChannels.length) return null;
-
             if (state.centerIndex < 0) state.centerIndex = 0;
-            if (state.centerIndex >= state.currentChannels.length) {
-                state.centerIndex = state.currentChannels.length - 1;
-            }
-
+            if (state.centerIndex >= state.currentChannels.length) state.centerIndex = state.currentChannels.length - 1;
             return state.currentChannels[state.centerIndex] || null;
         }
 
@@ -403,63 +396,52 @@
 
         function isFavorite(channel) {
             if (!channel || !channel.url) return false;
-
             for (var i = 0; i < config.favorites.length; i++) {
                 if (config.favorites[i].url === channel.url) return true;
             }
-
             return false;
         }
 
-        function aliasIdsForChannel(channel) {
-            var names = [];
-            var ids = [];
-            var used = {};
-            var i, j, key, arr;
+        function getManualChannelMeta(channel) {
+            var variants = [
+                normalizeName(channel && channel.name),
+                normalizeName(channel && channel.epgName),
+                normalizeName(cleanupChannelName(channel && channel.name)),
+                normalizeName(cleanupChannelName(channel && channel.epgName))
+            ];
+            var i;
 
-            if (!channel) return ids;
-
-            names.push(channel.name);
-            names.push(channel.epgName);
-            names.push(cleanupChannelName(channel.name));
-            names.push(cleanupChannelName(channel.epgName));
-
-            for (i = 0; i < names.length; i++) {
-                key = normalizeName(names[i]);
-                if (!key) continue;
-
-                arr = IPTVX_ALIAS_MAP[key];
-                if (!arr) continue;
-
-                for (j = 0; j < arr.length; j++) {
-                    if (!used[arr[j]]) {
-                        used[arr[j]] = true;
-                        ids.push(arr[j]);
-                    }
-                }
+            for (i = 0; i < variants.length; i++) {
+                if (variants[i] && MANUAL_CHANNEL_MAP[variants[i]]) return MANUAL_CHANNEL_MAP[variants[i]];
             }
 
-            return ids;
+            return null;
+        }
+
+        function mergeManualMeta(channel) {
+            var meta = getManualChannelMeta(channel);
+            if (!meta) return channel;
+
+            if (!channel.id && meta.epg) channel.id = meta.epg;
+            if (!channel.logo && meta.logo) channel.logo = meta.logo;
+
+            return channel;
         }
 
         function resolveChannelLogo(channel) {
             var names;
             var i;
             var nameKey;
-            var idKey;
-            var aliases;
+            var meta;
 
             if (!channel) return '';
-
             if (channel.logo) return channel.logo;
 
-            idKey = channel.id || '';
-            if (idKey && epg.iconById[idKey]) return epg.iconById[idKey];
+            meta = getManualChannelMeta(channel);
 
-            aliases = aliasIdsForChannel(channel);
-            for (i = 0; i < aliases.length; i++) {
-                if (epg.iconById[aliases[i]]) return epg.iconById[aliases[i]];
-            }
+            if (channel.id && epg.iconById[channel.id]) return epg.iconById[channel.id];
+            if (meta && meta.epg && epg.iconById[meta.epg]) return epg.iconById[meta.epg];
+            if (meta && meta.logo) return meta.logo;
 
             names = [
                 channel.epgName,
@@ -561,19 +543,18 @@
             var id;
             var byNameId;
             var names;
-            var aliases;
             var i;
             var key;
+            var meta;
 
             if (!channel) return null;
+
+            meta = getManualChannelMeta(channel);
 
             id = channel.id || '';
             if (id && epg.programsById[id]) return epg.programsById[id];
 
-            aliases = aliasIdsForChannel(channel);
-            for (i = 0; i < aliases.length; i++) {
-                if (epg.programsById[aliases[i]]) return epg.programsById[aliases[i]];
-            }
+            if (meta && meta.epg && epg.programsById[meta.epg]) return epg.programsById[meta.epg];
 
             names = [
                 channel.epgName,
@@ -665,14 +646,16 @@
                     if (!group) group = 'ОБЩИЕ';
 
                     if (url && url.indexOf('http') === 0) {
-                        state.channels.push({
+                        var channel = {
                             name: name,
                             url: url,
                             group: group,
                             logo: logo,
                             id: id,
                             epgName: epgName
-                        });
+                        };
+
+                        state.channels.push(mergeManualMeta(channel));
                     }
                 }
             }
