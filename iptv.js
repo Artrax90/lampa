@@ -1,13 +1,13 @@
 // ==Lampa==
 // name: IPTV PRO Universal
-// version: 4.0.3
+// version: 4.0.4
 // ==/Lampa==
 
 (function () {
     'use strict';
 
     function IPTVUniversal() {
-        var storage_key = 'iptv_universal_v403';
+        var storage_key = 'iptv_universal_v404';
         var controller_name = 'iptv_universal';
 
         var root;
@@ -24,6 +24,70 @@
         var controllerReady = false;
 
         var config = loadConfig();
+
+        var IPTVX_ALIAS_MAP = {
+            'bridge tv': ['bridge-tv'],
+            'bridge tv hits': ['bridge-tv-dance'],
+            'bridge tv dance': ['bridge-tv-dance'],
+            'bridge tv русский хит': ['bridge-tv-ruxit'],
+            'bridge tv russkiy hit': ['bridge-tv-ruxit'],
+            'bridge tv fresh': ['bridge-tv-fresh'],
+            'bridge tv фрэш': ['bridge-tv-fresh'],
+            'bridge tv шлягер': ['bridge-tv-shlager'],
+            'bridge tv shlager': ['bridge-tv-shlager'],
+            'bridge classic': ['bridge-classic'],
+            'bridge tv classic': ['bridge-classic'],
+            'муз тв': ['muz-tv'],
+            'muz tv': ['muz-tv'],
+            'первый канал': ['perviy-kanal'],
+            'первый': ['perviy-kanal'],
+            'россия 1': ['rossiya-1'],
+            'россия1': ['rossiya-1'],
+            'россия 24': ['rossiya-24'],
+            'россия24': ['rossiya-24'],
+            'россия к': ['rossiya-k'],
+            'россия культура': ['rossiya-k'],
+            'культура': ['rossiya-k'],
+            'нтв': ['ntv'],
+            'тнт': ['tnt'],
+            'стс': ['sts'],
+            'домашний': ['domashniy'],
+            'рен тв': ['ren-tv'],
+            'рентв': ['ren-tv'],
+            'ren tv': ['ren-tv'],
+            'тв 3': ['tv-3'],
+            'тв3': ['tv-3'],
+            'tv 3': ['tv-3'],
+            'пятница': ['pyatnica'],
+            'пятница!': ['pyatnica'],
+            'пятница! hd': ['pyatnica'],
+            'звезда': ['zvezda'],
+            'ю': ['u-tv'],
+            'u': ['u-tv'],
+            'канал ю': ['u-tv'],
+            'матч тв': ['match-tv'],
+            'match tv': ['match-tv'],
+            'карусель': ['karusel'],
+            'че': ['che'],
+            'че!': ['che'],
+            'disney': ['disney-channel'],
+            'дисней': ['disney-channel'],
+            'суббота': ['subbota'],
+            'спас': ['spas'],
+            'мир': ['mir'],
+            'мир 24': ['mir-24'],
+            'отр': ['otr'],
+            'ртр планета': ['rtr-planeta'],
+            'rtvi': ['rtvi'],
+            'euromusic': ['euromusic'],
+            'ru tv': ['ru-tv'],
+            'рутв': ['ru-tv'],
+            'ru tv hd': ['ru-tv'],
+            'record russian hits': ['record-russian-hits'],
+            'record супердискотека 90х': ['record-superdiskoteka-90x'],
+            'record trance': ['record-trance'],
+            'record megamix': ['record-megamix']
+        };
 
         var state = {
             groups: {},
@@ -130,9 +194,7 @@
                 raw = def;
             }
 
-            if (!Array.isArray(raw.playlists) || !raw.playlists.length) {
-                raw.playlists = def.playlists.slice();
-            }
+            if (!Array.isArray(raw.playlists) || !raw.playlists.length) raw.playlists = def.playlists.slice();
 
             raw.playlists = raw.playlists.filter(function (pl) {
                 return pl && typeof pl.url === 'string' && pl.url.indexOf('http') === 0;
@@ -349,11 +411,43 @@
             return false;
         }
 
+        function aliasIdsForChannel(channel) {
+            var names = [];
+            var ids = [];
+            var used = {};
+            var i, j, key, arr;
+
+            if (!channel) return ids;
+
+            names.push(channel.name);
+            names.push(channel.epgName);
+            names.push(cleanupChannelName(channel.name));
+            names.push(cleanupChannelName(channel.epgName));
+
+            for (i = 0; i < names.length; i++) {
+                key = normalizeName(names[i]);
+                if (!key) continue;
+
+                arr = IPTVX_ALIAS_MAP[key];
+                if (!arr) continue;
+
+                for (j = 0; j < arr.length; j++) {
+                    if (!used[arr[j]]) {
+                        used[arr[j]] = true;
+                        ids.push(arr[j]);
+                    }
+                }
+            }
+
+            return ids;
+        }
+
         function resolveChannelLogo(channel) {
             var names;
             var i;
             var nameKey;
             var idKey;
+            var aliases;
 
             if (!channel) return '';
 
@@ -362,10 +456,16 @@
             idKey = channel.id || '';
             if (idKey && epg.iconById[idKey]) return epg.iconById[idKey];
 
+            aliases = aliasIdsForChannel(channel);
+            for (i = 0; i < aliases.length; i++) {
+                if (epg.iconById[aliases[i]]) return epg.iconById[aliases[i]];
+            }
+
             names = [
                 channel.epgName,
                 channel.name,
-                cleanupChannelName(channel.name)
+                cleanupChannelName(channel.name),
+                cleanupChannelName(channel.epgName)
             ];
 
             for (i = 0; i < names.length; i++) {
@@ -461,6 +561,7 @@
             var id;
             var byNameId;
             var names;
+            var aliases;
             var i;
             var key;
 
@@ -469,10 +570,16 @@
             id = channel.id || '';
             if (id && epg.programsById[id]) return epg.programsById[id];
 
+            aliases = aliasIdsForChannel(channel);
+            for (i = 0; i < aliases.length; i++) {
+                if (epg.programsById[aliases[i]]) return epg.programsById[aliases[i]];
+            }
+
             names = [
                 channel.epgName,
                 channel.name,
-                cleanupChannelName(channel.name)
+                cleanupChannelName(channel.name),
+                cleanupChannelName(channel.epgName)
             ];
 
             for (i = 0; i < names.length; i++) {
