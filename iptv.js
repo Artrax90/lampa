@@ -1,13 +1,13 @@
 // ==Lampa==
 // name: IPTV PRO Universal
-// version: 4.1.5
+// version: 4.1.6
 // ==/Lampa==
 
 (function () {
     'use strict';
 
     function IPTVUniversal() {
-        var storage_key = 'iptv_universal_v415';
+        var storage_key = 'iptv_universal_v416';
         var controller_name = 'iptv_universal';
 
         var root;
@@ -828,7 +828,7 @@
 
             $('head').append(
                 '<style id="iptv-universal-style">' +
-                '.iptv-root{position:fixed;top:0;left:0;right:0;bottom:0;z-index:1000;background:#0b0d10;color:#fff;padding-top:5rem;overflow:hidden;}' +
+                '.iptv-root{position:fixed;top:0;left:0;right:0;bottom:0;z-index:1000;background:#0b0d10;color:#fff;padding-top:5rem;overflow:hidden;-webkit-overflow-scrolling:touch;}' +
                 '.iptv-layout{display:flex;width:100%;height:100%;}' +
                 '.iptv-col{height:100%;overflow-y:auto;box-sizing:border-box;background:rgba(255,255,255,0.02);border-right:1px solid rgba(255,255,255,0.08);-webkit-overflow-scrolling:touch;overscroll-behavior:contain;}' +
                 '.iptv-left{width:23rem;}' +
@@ -866,13 +866,13 @@
                 '.iptv-plugin-ico{width:2rem;height:2rem;display:inline-flex;align-items:center;justify-content:center;flex:0 0 2rem;}' +
                 '.iptv-plugin-ico svg{width:1.45rem;height:1.45rem;display:block;fill:none;stroke:#fff;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}' +
                 '@media (max-width: 980px){' +
-                '.iptv-root{position:absolute;top:0;left:0;right:0;bottom:0;padding-top:0;overflow-y:auto!important;overflow-x:hidden;z-index:1000;-webkit-overflow-scrolling:touch;overscroll-behavior:auto;background:#0b0d10;}' +
-                '.iptv-tabs{display:flex;position:sticky;top:0;z-index:20;}' +
-                '.iptv-layout{display:block;height:auto;min-height:calc(100% - 3.75rem);}' +
+                '.iptv-root{padding-top:4rem;overflow-y:auto!important;overflow-x:hidden;}' +
+                '.iptv-tabs{display:flex;position:sticky;top:0;z-index:15;}' +
+                '.iptv-layout{display:block;height:auto;min-height:100%;}' +
                 '.iptv-col{width:100%!important;height:auto!important;max-height:none!important;overflow:visible!important;border-right:none;border-bottom:1px solid rgba(255,255,255,0.08);}' +
                 '.iptv-right{padding:1rem 1rem 6rem 1rem;}' +
                 '.iptv-col.mobile-hidden{display:none!important;}' +
-                '.iptv-overlay{position:absolute;top:0;left:0;right:0;bottom:0;display:block;overflow-y:auto!important;-webkit-overflow-scrolling:touch;}' +
+                '.iptv-overlay{top:4rem;display:block;overflow-y:auto!important;-webkit-overflow-scrolling:touch;}' +
                 '.iptv-overlay-left{width:100%;overflow:visible!important;border-right:none;border-bottom:1px solid rgba(255,255,255,0.08);}' +
                 '.iptv-overlay-right{overflow:visible!important;padding:1rem 1rem 6rem 1rem;}' +
                 '}' +
