@@ -1,13 +1,13 @@
 // ==Lampa==
 // name: IPTV PRO Universal
-// version: 4.0.7
+// version: 4.0.8
 // ==/Lampa==
 
 (function () {
     'use strict';
 
     function IPTVUniversal() {
-        var storage_key = 'iptv_universal_v407';
+        var storage_key = 'iptv_universal_v408';
         var controller_name = 'iptv_universal';
 
         var root;
@@ -17,6 +17,11 @@
         var rightCol;
         var overlay;
         var mobileTabs;
+        var requester = createRequester();
+        var lastTouchAction = {
+            tag: '',
+            time: 0
+        };
 
         var view = 'browser';
         var keyboardMode = 'add';
@@ -261,6 +266,50 @@
             };
         }
 
+        function createRequester() {
+            try {
+                if (window.Lampa && Lampa.Reguest) {
+                    return new Lampa.Reguest();
+                }
+            } catch (e) {
+                logError('createRequester', e);
+            }
+
+            return null;
+        }
+
+        function requestText(url, timeout, success, error) {
+            try {
+                if (requester && requester.timeout) requester.timeout(timeout || 25000);
+
+                if (requester && requester.silent) {
+                    requester.silent(url, function (data) {
+                        success(typeof data === 'string' ? data : safeText(data));
+                    }, function (err) {
+                        error(err);
+                    }, false, {
+                        dataType: 'text'
+                    });
+                    return;
+                }
+            } catch (e) {
+                logError('requestText.silent', e);
+            }
+
+            $.ajax({
+                url: url,
+                method: 'GET',
+                dataType: 'text',
+                timeout: timeout || 25000,
+                success: function (text) {
+                    success(text || '');
+                },
+                error: function (err) {
+                    error(err);
+                }
+            });
+        }
+
         function logError(tag, err) {
             try {
                 console.error('[IPTV PRO]', tag, err);
@@ -386,6 +435,20 @@
         function actionEvents() {
             if (isTouchDevice()) return 'hover:touch';
             return 'hover:enter hover:click click';
+        }
+
+        function shouldSkipTouchAction(tag) {
+            if (!isTouchDevice()) return false;
+
+            var now = Date.now();
+
+            if (lastTouchAction.tag === tag && (now - lastTouchAction.time) < 650) {
+                return true;
+            }
+
+            lastTouchAction.tag = tag;
+            lastTouchAction.time = now;
+            return false;
         }
 
         function notify(text) {
@@ -553,18 +616,10 @@
         }
 
         function epgStatusText() {
-            if (state.epgStatus.state === 'loaded') {
-                return 'EPG: загружен';
-            }
-            if (state.epgStatus.state === 'loaded_empty') {
-                return 'EPG: файл пустой';
-            }
-            if (state.epgStatus.state === 'error') {
-                return 'EPG: ошибка загрузки';
-            }
-            if (state.epgStatus.state === 'loading') {
-                return 'EPG: загрузка...';
-            }
+            if (state.epgStatus.state === 'loaded') return 'EPG: загружен';
+            if (state.epgStatus.state === 'loaded_empty') return 'EPG: файл пустой';
+            if (state.epgStatus.state === 'error') return 'EPG: ошибка загрузки';
+            if (state.epgStatus.state === 'loading') return 'EPG: загрузка...';
             return 'EPG: не загружен';
         }
 
@@ -644,10 +699,14 @@
         }
 
         function bindAction(el, tag, handler) {
-            el.addClass('selector');
+            if (!isTouchDevice()) el.addClass('selector');
+
             el.on(actionEvents(), function (e) {
                 e.preventDefault();
                 e.stopPropagation();
+
+                if (shouldSkipTouchAction(tag)) return;
+
                 runSafe(tag, handler);
             });
         }
@@ -852,28 +911,21 @@
                 return;
             }
 
-            $.ajax({
-                url: url,
-                method: 'GET',
-                dataType: 'text',
-                timeout: 25000,
-                success: function (xmlText) {
-                    runSafe('parseEpg', function () {
-                        var parsed = parseEpg(xmlText || '', url);
+            requestText(url, 25000, function (xmlText) {
+                runSafe('parseEpg', function () {
+                    var parsed = parseEpg(xmlText || '', url);
 
-                        if (parsed) {
-                            renderRight();
-                            renderCenter();
-                            updateFocus();
-                        } else {
-                            tryLoadEpg(urls, index + 1);
-                        }
-                    });
-                },
-                error: function () {
-                    logError('loadEpg', 'EPG ajax error: ' + url);
-                    tryLoadEpg(urls, index + 1);
-                }
+                    if (parsed) {
+                        renderRight();
+                        renderCenter();
+                        updateFocus();
+                    } else {
+                        tryLoadEpg(urls, index + 1);
+                    }
+                });
+            }, function (err) {
+                logError('loadEpg', { url: url, error: err });
+                tryLoadEpg(urls, index + 1);
             });
         }
 
@@ -990,25 +1042,19 @@
 
             resetEpg();
 
-            $.ajax({
-                url: playlist.url,
-                method: 'GET',
-                dataType: 'text',
-                timeout: 20000,
-                success: function (text) {
-                    runSafe('parsePlaylist', function () {
-                        parsePlaylist(text || '');
-                        renderAll();
-                        loadEpg();
-                    });
-                },
-                error: function () {
-                    notify('Ошибка загрузки плейлиста');
-                    runSafe('parsePlaylistEmpty', function () {
-                        parsePlaylist('');
-                        renderAll();
-                    });
-                }
+            requestText(playlist.url, 20000, function (text) {
+                runSafe('parsePlaylist', function () {
+                    parsePlaylist(text || '');
+                    renderAll();
+                    loadEpg();
+                });
+            }, function (err) {
+                logError('loadPlaylist', err);
+                notify('Ошибка загрузки плейлиста');
+                runSafe('parsePlaylistEmpty', function () {
+                    parsePlaylist('');
+                    renderAll();
+                });
             });
         }
 
@@ -1910,6 +1956,10 @@
 
         this.destroy = function () {
             try {
+                if (requester && requester.clear) requester.clear();
+            } catch (e0) {}
+
+            try {
                 if (Lampa.Controller && Lampa.Controller.remove) {
                     Lampa.Controller.remove(controller_name);
                 }
@@ -1948,7 +1998,8 @@
 
             if ($('.menu .menu__list').find('.iptv-universal-item').length) return;
 
-            var item = $('<li class="menu__item selector iptv-universal-item"></li>');
+            var item = $('<li class="menu__item iptv-universal-item"></li>');
+            if (!isTouchDeviceGlobal()) item.addClass('selector');
             item.append($('<div class="menu__text"></div>').text('IPTV PRO'));
 
             item.on(menuOpenEventsGlobal(), function (e) {
