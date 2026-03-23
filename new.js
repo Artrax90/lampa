@@ -210,10 +210,10 @@
     ensureStyles: function () {
       if (document.getElementById(CSS_ID)) return;
       var css = ""
-        + ".iptv6-root{position:fixed;inset:0;z-index:1000;background:linear-gradient(180deg,#0b1020,#090d18);color:#eef3ff;padding-top:4.6rem;overflow:hidden;box-sizing:border-box;}"
+        + ".iptv6-root{position:fixed;inset:0;z-index:1000;background:linear-gradient(180deg,#0b1020,#090d18);color:#eef3ff;padding-top:4.6rem;overflow:hidden;box-sizing:border-box;touch-action:manipulation;}"
         + ".iptv6-root *{box-sizing:border-box}"
         + ".iptv6-grid{display:grid;grid-template-columns:16rem minmax(0,1fr) 19rem;height:100%;width:100%;min-width:0;}"
-        + ".iptv6-col{overflow:auto;overflow-x:hidden;min-width:0;border-right:1px solid rgba(125,147,195,.18);background:rgba(12,18,34,.55);backdrop-filter:blur(2px);}"
+        + ".iptv6-col{overflow:auto;overflow-x:hidden;min-width:0;border-right:1px solid rgba(125,147,195,.18);background:rgba(12,18,34,.55);backdrop-filter:blur(2px);-webkit-overflow-scrolling:touch;overscroll-behavior:contain;touch-action:pan-y;}"
         + ".iptv6-col:last-child{border-right:none;background:rgba(8,13,26,.85);}"
         + ".iptv6-head{padding:.9rem 1rem;font-weight:700;position:sticky;top:0;background:rgba(12,18,34,.92);border-bottom:1px solid rgba(125,147,195,.2);z-index:2;}"
         + ".iptv6-item{margin:.45rem .6rem;padding:.8rem .85rem;border-radius:.75rem;background:rgba(35,52,90,.4);cursor:pointer;}"
@@ -230,13 +230,13 @@
         + ".iptv6-tab{flex:1;text-align:center;padding:.6rem;border-radius:.65rem;background:rgba(35,52,90,.4)}"
         + ".iptv6-tab.active{background:#3b69d8}"
         + ".iptv6-hidden{display:none!important}"
-        + ".iptv6-overlay{position:absolute;inset:4.6rem 0 0 0;background:rgba(4,8,18,.97);display:grid;grid-template-columns:20rem minmax(0,1fr);z-index:5;overflow:hidden;}"
+        + ".iptv6-overlay{position:absolute;inset:4.6rem 0 0 0;background:rgba(4,8,18,.97);display:grid;grid-template-columns:20rem minmax(0,1fr);z-index:5;overflow:hidden;touch-action:pan-y;}"
         + ".iptv6-overlay.hidden{display:none}"
         + ".iptv6-input{margin:.7rem;width:calc(100% - 1.4rem);padding:.75rem;border:1px solid rgba(125,147,195,.35);border-radius:.6rem;background:#111a32;color:#fff;}"
         + ".iptv6-kgrid{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:.45rem;padding:.7rem;}"
         + ".iptv6-kcell{margin:0;padding:.65rem;text-align:center}"
         + ".iptv6-kactions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.45rem;padding:.7rem;padding-top:0}"
-        + "@media (max-width:980px){.iptv6-root{padding-top:4rem}.iptv6-tabs{display:flex}.iptv6-grid{display:block}.iptv6-col{height:auto;border-right:none;border-bottom:1px solid rgba(125,147,195,.18)}.iptv6-col.mobile-hide{display:none}.iptv6-overlay{grid-template-columns:1fr;inset:4rem 0 0 0}}";
+        + "@media (max-width:980px){.iptv6-root{padding-top:4rem;overflow-y:auto;-webkit-overflow-scrolling:touch}.iptv6-tabs{display:flex;position:sticky;top:0;z-index:20;background:#0b1020}.iptv6-grid{display:block;height:auto;min-height:100%}.iptv6-col{height:auto;max-height:none;border-right:none;border-bottom:1px solid rgba(125,147,195,.18)}.iptv6-col.mobile-hide{display:none}.iptv6-overlay{grid-template-columns:1fr;inset:4rem 0 0 0;overflow:auto;-webkit-overflow-scrolling:touch}}";
       var st = document.createElement("style");
       st.id = CSS_ID;
       st.textContent = css;
