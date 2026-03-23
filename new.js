@@ -568,38 +568,41 @@
     var rowHeight = 76;
     var overscan = 8;
     var epgData = null;
+    var lastRowTap = { index: -1, ts: 0 };
 
     function ensureStyles() {
       if (document.getElementById(PLUGIN_ID + "_styles")) return;
       var css = [
-        "." + PLUGIN_ID + "{position:fixed;inset:0;z-index:9990;background:#141821;color:#fff;font-family:Arial,sans-serif;display:flex;flex-direction:column;}",
-        "." + PLUGIN_ID + " .top{padding:10px;display:flex;gap:8px;align-items:center;background:#1b2230;border-bottom:1px solid #27334a;}",
-        "." + PLUGIN_ID + " input,." + PLUGIN_ID + " select,." + PLUGIN_ID + " button{background:#222b3c;color:#fff;border:1px solid #2f3b52;border-radius:8px;padding:8px 10px;font-size:14px;}",
-        "." + PLUGIN_ID + " button{cursor:pointer;min-height:40px;}",
-        "." + PLUGIN_ID + " button:active{transform:translateY(1px);}",
-        "." + PLUGIN_ID + " .grow{flex:1;}",
-        "." + PLUGIN_ID + " .main{display:flex;gap:10px;flex:1;min-height:0;padding:10px;}",
-        "." + PLUGIN_ID + " .left{width:260px;display:flex;flex-direction:column;gap:8px;}",
-        "." + PLUGIN_ID + " .right{flex:1;display:flex;flex-direction:column;min-width:0;}",
-        "." + PLUGIN_ID + " .groups{display:flex;flex-wrap:wrap;gap:8px;max-height:132px;overflow:auto;}",
-        "." + PLUGIN_ID + " .group{padding:7px 10px;background:#20293a;border-radius:16px;border:1px solid #2d3a53;}",
+        "." + PLUGIN_ID + "{position:fixed;inset:0;z-index:9990;background:#0f131d;color:#fff;font-family:Arial,sans-serif;display:flex;flex-direction:column;}",
+        "." + PLUGIN_ID + " input,." + PLUGIN_ID + " select,." + PLUGIN_ID + " button{background:#1c2333;color:#fff;border:1px solid #2a344c;border-radius:8px;padding:8px 10px;font-size:14px;}",
+        "." + PLUGIN_ID + " button{cursor:pointer;min-height:38px;text-align:left;}",
+        "." + PLUGIN_ID + " .main{display:grid;grid-template-columns:280px 1fr 260px;gap:10px;flex:1;min-height:0;padding:10px;}",
+        "." + PLUGIN_ID + " .col{display:flex;flex-direction:column;min-height:0;background:#111827;border:1px solid #27324b;border-radius:10px;overflow:hidden;}",
+        "." + PLUGIN_ID + " .head{padding:10px;border-bottom:1px solid #27324b;display:flex;gap:8px;align-items:center;}",
+        "." + PLUGIN_ID + " .title{font-size:13px;color:#9eb0d8;}",
+        "." + PLUGIN_ID + " .left-actions{padding:10px;display:flex;flex-direction:column;gap:8px;border-bottom:1px solid #27324b;}",
+        "." + PLUGIN_ID + " .groups{overflow:auto;padding:8px;display:flex;flex-direction:column;gap:6px;}",
+        "." + PLUGIN_ID + " .group{padding:8px 10px;border-radius:8px;background:#172034;border:1px solid #23304a;cursor:pointer;}",
         "." + PLUGIN_ID + " .group.active{background:#2f6fe4;border-color:#5a93ff;}",
-        "." + PLUGIN_ID + " .list{flex:1;min-height:0;position:relative;background:#101521;border:1px solid #2a3448;border-radius:10px;overflow:auto;}",
+        "." + PLUGIN_ID + " .list{flex:1;min-height:0;position:relative;overflow:auto;}",
         "." + PLUGIN_ID + " .list-inner{position:relative;width:100%;}",
-        "." + PLUGIN_ID + " .row{position:absolute;left:0;right:0;height:72px;display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid #242f44;cursor:pointer;}",
-        "." + PLUGIN_ID + " .row:hover{background:#1a2844;}",
-        "." + PLUGIN_ID + " .row.focused{background:#203458;outline:1px solid #3f5d8f;}",
-        "." + PLUGIN_ID + " .logo{width:64px;height:40px;object-fit:contain;background:#0d111a;border-radius:6px;}",
+        "." + PLUGIN_ID + " .row{position:absolute;left:0;right:0;height:72px;display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid #1f293f;cursor:pointer;}",
+        "." + PLUGIN_ID + " .row.focused{background:#26487e;}",
+        "." + PLUGIN_ID + " .logo{width:56px;height:40px;object-fit:contain;background:#0d111a;border-radius:4px;}",
         "." + PLUGIN_ID + " .meta{display:flex;flex-direction:column;gap:3px;min-width:0;}",
-        "." + PLUGIN_ID + " .name{font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}",
-        "." + PLUGIN_ID + " .epg{font-size:12px;color:#9bb5e6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}",
-        "." + PLUGIN_ID + " .fav{margin-left:auto;font-size:20px;color:#ffd966;min-width:36px;text-align:center;}",
-        "." + PLUGIN_ID + " .status{font-size:12px;color:#9bb5e6;padding:0 10px 10px;}",
-        "." + PLUGIN_ID + " .panel{background:#111828;border:1px solid #2b3751;border-radius:10px;padding:10px;}",
-        "." + PLUGIN_ID + " .hidden{display:none!important;}",
+        "." + PLUGIN_ID + " .name{font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}",
+        "." + PLUGIN_ID + " .epg{font-size:11px;color:#97acd9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}",
+        "." + PLUGIN_ID + " .fav{margin-left:auto;font-size:18px;color:#ffd966;min-width:28px;text-align:center;}",
+        "." + PLUGIN_ID + " .status{font-size:12px;color:#8ea3d2;padding:8px 10px;border-top:1px solid #27324b;}",
+        "." + PLUGIN_ID + " .info{padding:10px;display:flex;flex-direction:column;gap:8px;overflow:auto;}",
+        "." + PLUGIN_ID + " .info-logo{width:72px;height:48px;object-fit:contain;background:#0d111a;border-radius:4px;}",
+        "." + PLUGIN_ID + " .info-name{font-size:20px;line-height:1.2;}",
+        "." + PLUGIN_ID + " .info-sub{font-size:13px;color:#9bb2df;}",
+        "." + PLUGIN_ID + " .info-actions{display:flex;flex-direction:column;gap:8px;margin-top:8px;}",
+        "." + PLUGIN_ID + " .btn-main{background:#2f6fe4;border-color:#5a93ff;font-weight:700;}",
         "." + PLUGIN_ID + " .notify{position:fixed;right:15px;bottom:15px;background:#1f2a3c;border:1px solid #33486d;border-radius:8px;padding:10px 12px;z-index:10020;}",
-        "@media(max-width:1024px){." + PLUGIN_ID + " .main{flex-direction:column;}." + PLUGIN_ID + " .left{width:auto;}}",
-        "@media(max-width:640px){." + PLUGIN_ID + " .top{flex-wrap:wrap;}." + PLUGIN_ID + " .row{height:78px;}." + PLUGIN_ID + " button,input,select{font-size:15px;}}"
+        "@media(max-width:1180px){." + PLUGIN_ID + " .main{grid-template-columns:240px 1fr;}" + "." + PLUGIN_ID + " .col-info{grid-column:1/-1;max-height:240px;}}",
+        "@media(max-width:760px){." + PLUGIN_ID + " .main{grid-template-columns:1fr;}" + "." + PLUGIN_ID + " .col{min-height:220px;}}"
       ].join("");
       var style = document.createElement("style");
       style.id = PLUGIN_ID + "_styles";
@@ -613,18 +616,24 @@
       root = document.createElement("div");
       root.className = PLUGIN_ID;
       root.innerHTML =
-        '<div class="top">' +
-        '<select id="iptv_playlist_select"></select>' +
-        '<button id="iptv_btn_add">+ Плейлист</button>' +
-        '<button id="iptv_btn_manage">Плейлисты</button>' +
-        '<button id="iptv_btn_favorites">Избранное</button>' +
-        '<input id="iptv_search" class="grow" placeholder="Поиск каналов..." />' +
-        '<button id="iptv_btn_close">Закрыть</button>' +
-        "</div>" +
         '<div class="main">' +
-        '<div class="left"><div class="panel"><div><strong>Категории</strong></div><div id="iptv_groups" class="groups"></div></div><div class="panel"><div><strong>EPG URL</strong></div><input id="iptv_epg_url" placeholder="https://...xml" /><button id="iptv_epg_save">Сохранить EPG URL</button></div></div>' +
-        '<div class="right"><div id="iptv_list" class="list"><div class="list-inner" id="iptv_list_inner"></div></div><div id="iptv_status" class="status"></div></div>' +
-        "</div>";
+        '<div class="col">' +
+        '<div class="head"><div class="title">Плейлист</div><select id="iptv_playlist_select"></select></div>' +
+        '<div class="left-actions">' +
+        '<button id="iptv_btn_add">Добавить плейлист</button>' +
+        '<button id="iptv_btn_manage">Список плейлистов</button>' +
+        '<input id="iptv_search" placeholder="Поиск" />' +
+        '<button id="iptv_btn_favorites">★ Избранное</button>' +
+        '<input id="iptv_epg_url" placeholder="EPG URL (опционально)" />' +
+        '<button id="iptv_epg_save">Сохранить EPG URL</button>' +
+        '<button id="iptv_btn_close">Закрыть</button>' +
+        '</div><div id="iptv_groups" class="groups"></div></div>' +
+        '<div class="col">' +
+        '<div class="head"><div class="title">Каналы</div></div>' +
+        '<div id="iptv_list" class="list"><div class="list-inner" id="iptv_list_inner"></div></div>' +
+        '<div id="iptv_status" class="status"></div></div>' +
+        '<div class="col col-info"><div class="head"><div class="title">Инфо</div></div>' +
+        '<div id="iptv_info" class="info"></div></div></div>';
       document.body.appendChild(root);
       listViewport = root.querySelector("#iptv_list");
       listInner = root.querySelector("#iptv_list_inner");
@@ -663,9 +672,14 @@
         if (e.target.classList.contains("fav")) {
           favoritesManager.toggle(channel);
           renderVirtualRows();
+          renderInfoPanel();
           return;
         }
-        playerController.play(channel);
+        var now = Date.now();
+        if (lastRowTap.index === idx && now - lastRowTap.ts < 450) playerController.play(channel);
+        lastRowTap = { index: idx, ts: now };
+        renderVirtualRows();
+        renderInfoPanel();
       }
 
       listViewport.addEventListener("click", onListActivate);
@@ -816,6 +830,51 @@
       }
       listInner.innerHTML = html.join("");
       setStatus("Каналов: " + total + " | Выбран: " + (APP_STATE.selectedIndex + 1));
+      renderInfoPanel();
+    }
+
+    function renderInfoPanel() {
+      var infoNode = root.querySelector("#iptv_info");
+      if (!infoNode) return;
+      var ch = APP_STATE.filteredChannels[APP_STATE.selectedIndex];
+      if (!ch) {
+        infoNode.innerHTML = '<div class="info-sub">Выберите канал</div>';
+        return;
+      }
+      var info = epgManager.getProgramInfo(epgData, ch);
+      var current = info && info.current ? info.current.title : "Телепрограмма не найдена";
+      var next = info && info.next ? info.next.title : "—";
+      var group = ch.group || "Без категории";
+      var favText = favoritesManager.isFavorite(ch) ? "Убрать из избранного" : "Добавить в избранное";
+      infoNode.innerHTML =
+        '<img class="info-logo" src="' + utils.sanitizeText(ch.logo || "") + '" onerror="this.style.visibility=\'hidden\'" />' +
+        '<div class="info-name">' + utils.sanitizeText(ch.name) + '</div>' +
+        '<div class="info-sub">Группа: ' + utils.sanitizeText(group) + '</div>' +
+        '<div class="info-sub">Сейчас: ' + utils.sanitizeText(current) + '</div>' +
+        '<div class="info-sub">Далее: ' + utils.sanitizeText(next) + '</div>' +
+        '<div class="info-sub">' + utils.sanitizeText(ch.streamUrl || "") + '</div>' +
+        '<div class="info-actions">' +
+        '<button id="iptv_btn_watch" class="btn-main">Смотреть</button>' +
+        '<button id="iptv_btn_toggle_fav">' + utils.sanitizeText(favText) + '</button>' +
+        '<button id="iptv_btn_remove_current">Удалить текущий плейлист</button>' +
+        "</div>";
+
+      infoNode.querySelector("#iptv_btn_watch").addEventListener("click", function () {
+        playerController.play(ch);
+      });
+      infoNode.querySelector("#iptv_btn_toggle_fav").addEventListener("click", function () {
+        favoritesManager.toggle(ch);
+        renderVirtualRows();
+      });
+      infoNode.querySelector("#iptv_btn_remove_current").addEventListener("click", function () {
+        if (!APP_STATE.activePlaylist) return;
+        if (APP_STATE.activePlaylist.readOnly) {
+          notify("Default-плейлист нельзя удалить");
+          return;
+        }
+        playlistManager.remove(APP_STATE.activePlaylist.id);
+        initLoad();
+      });
     }
 
     function notify(text) {
@@ -1039,6 +1098,42 @@
     return false;
   }
 
+  function addSidebarMenuEntry() {
+    try {
+      if (!window.Lampa || !window.$ || !Lampa.Menu || typeof Lampa.Menu.render !== "function") return false;
+      var action = "iptv_plugin_open";
+      var selector = '[data-action="' + action + '"]';
+      if ($(selector).length) return true;
+
+      var item = $(
+        '<li class="menu__item selector" data-action="' +
+          action +
+          '">' +
+          '<div class="menu__ico">' +
+          '<svg height="30" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">' +
+          '<path d="M3 7h18v10H3V7Zm2 2v6h14V9H5Zm3 10h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>' +
+          "</svg>" +
+          '</div><div class="menu__text">IPTV</div></li>'
+      );
+
+      item.on("hover:enter", function () {
+        pluginApi.start();
+      });
+      item.on("click", function () {
+        pluginApi.start();
+      });
+
+      var menu = Lampa.Menu.render();
+      var afterTv = menu.find('[data-action="tv"]');
+      if (afterTv.length) afterTv.after(item);
+      else menu.append(item);
+      return true;
+    } catch (e) {
+      utils.log("Sidebar menu integration failed", e);
+      return false;
+    }
+  }
+
   function registerLampaButton() {
     try {
       if (!window.Lampa) return false;
@@ -1086,7 +1181,12 @@
                 onChange: onRun
               });
 
-              if (!addedInCatalog && !addedInSettings) {
+              var addedInSidebar = addSidebarMenuEntry();
+              if (!addedInSidebar) {
+                setTimeout(addSidebarMenuEntry, 1200);
+                setTimeout(addSidebarMenuEntry, 2800);
+              }
+              if (!addedInCatalog && !addedInSettings && !addedInSidebar) {
                 addFallbackLauncherButton();
               }
             } catch (err) {
