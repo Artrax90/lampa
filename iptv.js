@@ -1,13 +1,13 @@
 // ==Lampa==
 // name: IPTV PRO Universal
-// version: 4.1.7
+// version: 4.1.6
 // ==/Lampa==
 
 (function () {
     'use strict';
 
     function IPTVUniversal() {
-        var storage_key = 'iptv_universal_v417';
+        var storage_key = 'iptv_universal_v416';
         var controller_name = 'iptv_universal';
 
         var root;
@@ -257,11 +257,6 @@
             return {
                 playlists: [
                     {
-                        name: 'Artrax M3UCreator',
-                        url: 'https://raw.githubusercontent.com/Artrax90/m3ucreator/main/pl.m3u',
-                        locked: true
-                    },
-                    {
                         name: 'MEGA',
                         url: 'https://raw.githubusercontent.com/loganettv/playlists/refs/heads/main/mega.m3u',
                         locked: true
@@ -385,7 +380,6 @@
             ensureBuiltinPlaylist(raw.playlists, def.playlists[0]);
             ensureBuiltinPlaylist(raw.playlists, def.playlists[1]);
             ensureBuiltinPlaylist(raw.playlists, def.playlists[2]);
-            ensureBuiltinPlaylist(raw.playlists, def.playlists[3]);
 
             if (!Array.isArray(raw.favorites)) raw.favorites = [];
 
