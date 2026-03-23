@@ -272,7 +272,7 @@
                         locked: true
                     },
                     {
-                        name: 'PRISMA',
+                        name: 'ARTRAX',
                         url: 'https://raw.githubusercontent.com/Artrax90/m3ucreator/refs/heads/main/pl.m3u',
                         locked: true
                     }
@@ -2253,4 +2253,5 @@
         });
     }
 })();
+
 
