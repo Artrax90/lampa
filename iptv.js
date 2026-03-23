@@ -1,13 +1,13 @@
 // ==Lampa==
 // name: IPTV PRO Universal
-// version: 4.1.1
+// version: 4.1.2
 // ==/Lampa==
 
 (function () {
     'use strict';
 
     function IPTVUniversal() {
-        var storage_key = 'iptv_universal_v411';
+        var storage_key = 'iptv_universal_v412';
         var controller_name = 'iptv_universal';
 
         var root;
@@ -223,8 +223,9 @@
             pageFailedById: {}
         };
 
-        var DEFAULT_EPG_URL = 'https://iptv-epg.org/files/epg-ru.xml';
+        var DEFAULT_EPG_URL = 'https://iptvx.one/epg/epg.xml.gz';
         var FALLBACK_EPG_URLS = [
+            'https://iptv-epg.org/files/epg-ru.xml',
             'https://iptvx.one/EPG_NOARCH',
             'https://iptvx.one/EPG_LITE',
             'https://iptvx.one/EPG'
@@ -793,11 +794,11 @@
             if (!epgId) return;
             if (epg.pageProgramsById[epgId]) return;
             if (epg.pagePendingById[epgId]) return;
+            if (epg.pageFailedById[epgId]) return;
 
             epg.pagePendingById[epgId] = true;
-            delete epg.pageFailedById[epgId];
 
-            requestText('https://epg.iptvx.one/id/' + epgId, 12000, function (html) {
+            requestText('https://epg.iptvx.one/id/' + epgId, 8000, function (html) {
                 delete epg.pagePendingById[epgId];
 
                 runSafe('parseChannelPagePrograms', function () {
@@ -829,7 +830,7 @@
                 '<style id="iptv-universal-style">' +
                 '.iptv-root{position:fixed;top:0;left:0;right:0;bottom:0;z-index:1000;background:#0b0d10;color:#fff;padding-top:5rem;overflow:hidden;}' +
                 '.iptv-layout{display:flex;width:100%;height:100%;}' +
-                '.iptv-col{height:100%;overflow-y:auto;box-sizing:border-box;background:rgba(255,255,255,0.02);border-right:1px solid rgba(255,255,255,0.08);-webkit-overflow-scrolling:touch;touch-action:pan-y;}' +
+                '.iptv-col{height:100%;overflow-y:auto;box-sizing:border-box;background:rgba(255,255,255,0.02);border-right:1px solid rgba(255,255,255,0.08);-webkit-overflow-scrolling:touch;touch-action:pan-y;overscroll-behavior:contain;}' +
                 '.iptv-left{width:23rem;}' +
                 '.iptv-center{flex:1;}' +
                 '.iptv-right{width:26rem;padding:1.5rem;border-right:none;background:#080a0d;}' +
@@ -853,7 +854,7 @@
                 '.iptv-epg-label{display:inline-block;min-width:4rem;color:rgba(255,255,255,0.6);}' +
                 '.iptv-overlay{position:absolute;top:5rem;left:0;right:0;bottom:0;background:#0b0d10;display:flex;z-index:10;}' +
                 '.iptv-overlay.hidden{display:none;}' +
-                '.iptv-overlay-left{width:28rem;overflow-y:auto;border-right:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);touch-action:pan-y;}' +
+                '.iptv-overlay-left{width:28rem;overflow-y:auto;border-right:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);touch-action:pan-y;overscroll-behavior:contain;}' +
                 '.iptv-overlay-right{flex:1;overflow-y:auto;padding:1.5rem;}' +
                 '.iptv-display{padding:1rem;border-radius:0.55rem;background:rgba(255,255,255,0.06);min-height:3rem;margin-bottom:1rem;word-break:break-all;}' +
                 '.iptv-keyboard{display:grid;grid-template-columns:repeat(10,1fr);gap:0.45rem;}' +
@@ -863,7 +864,7 @@
                 '.iptv-tabs{display:none;gap:0.5rem;padding:0.75rem;background:#0b0d10;border-bottom:1px solid rgba(255,255,255,0.08);}' +
                 '.iptv-tab{margin:0;text-align:center;flex:1;}' +
                 '.iptv-plugin-ico{width:2rem;height:2rem;display:inline-flex;align-items:center;justify-content:center;flex:0 0 2rem;}' +
-                '.iptv-plugin-ico svg{width:1.7rem;height:1.7rem;display:block;fill:none;stroke:#fff;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}' +
+                '.iptv-plugin-ico svg{width:1.45rem;height:1.45rem;display:block;fill:none;stroke:#fff;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}' +
                 '@media (max-width: 980px){' +
                 '.iptv-root{padding-top:4rem;overflow-y:auto;}' +
                 '.iptv-tabs{display:flex;position:sticky;top:0;z-index:15;}' +
@@ -922,14 +923,12 @@
         }
 
         function bindAction(el, tag, handler) {
-            el.addClass('selector');
-
             if (isTouchDevice()) {
                 attachTouchTap(el, tag, handler);
                 return;
             }
 
-            el.on('hover:click click', function (e) {
+            el.on('click', function (e) {
                 e.preventDefault();
                 e.stopPropagation();
                 runSafe(tag, handler);
@@ -2163,13 +2162,10 @@
             return $(
                 '<div class="iptv-plugin-ico" aria-hidden="true">' +
                     '<svg viewBox="0 0 24 24">' +
-                        '<rect x="4" y="5" width="16" height="14" rx="2"></rect>' +
-                        '<path d="M8 9h8"></path>' +
-                        '<path d="M8 12h8"></path>' +
-                        '<path d="M8 15h5"></path>' +
-                        '<circle cx="6.5" cy="9" r="0.8"></circle>' +
-                        '<circle cx="6.5" cy="12" r="0.8"></circle>' +
-                        '<circle cx="6.5" cy="15" r="0.8"></circle>' +
+                        '<rect x="4" y="6" width="16" height="11" rx="2"></rect>' +
+                        '<path d="M9 20h6"></path>' +
+                        '<path d="M12 17v3"></path>' +
+                        '<path d="M8 8.5h8"></path>' +
                     '</svg>' +
                 '</div>'
             );
@@ -2259,7 +2255,7 @@
         var moved = false;
 
         if (!isTouchDeviceGlobal()) {
-            el.on('hover:click click', function (e) {
+            el.on('click', function (e) {
                 e.preventDefault();
                 e.stopPropagation();
                 handler();
@@ -2302,17 +2298,12 @@
     function pluginMenuIcon() {
         return $(
             '<div class="menu__ico">' +
-                '<div style="width:2rem;height:2rem;display:flex;align-items:center;justify-content:center;">' +
-                    '<svg viewBox="0 0 24 24" style="width:1.65rem;height:1.65rem;display:block;fill:none;stroke:#fff;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;">' +
-                        '<rect x="4" y="5" width="16" height="14" rx="2"></rect>' +
-                        '<path d="M8 9h8"></path>' +
-                        '<path d="M8 12h8"></path>' +
-                        '<path d="M8 15h5"></path>' +
-                        '<circle cx="6.5" cy="9" r="0.8"></circle>' +
-                        '<circle cx="6.5" cy="12" r="0.8"></circle>' +
-                        '<circle cx="6.5" cy="15" r="0.8"></circle>' +
-                    '</svg>' +
-                '</div>' +
+                '<svg viewBox="0 0 24 24" style="width:1.45rem;height:1.45rem;display:block;fill:none;stroke:#fff;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;margin:auto;">' +
+                    '<rect x="4" y="6" width="16" height="11" rx="2"></rect>' +
+                    '<path d="M9 20h6"></path>' +
+                    '<path d="M12 17v3"></path>' +
+                    '<path d="M8 8.5h8"></path>' +
+                '</svg>' +
             '</div>'
         );
     }
