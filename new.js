@@ -204,9 +204,10 @@
     ensureStyles: function () {
       if (document.getElementById(CSS_ID)) return;
       var css = ""
-        + ".iptv6-root{position:fixed;inset:0;z-index:1000;background:linear-gradient(180deg,#0b1020,#090d18);color:#eef3ff;padding-top:4.6rem;}"
-        + ".iptv6-grid{display:grid;grid-template-columns:17rem 1fr 20rem;height:100%;}"
-        + ".iptv6-col{overflow:auto;border-right:1px solid rgba(125,147,195,.18);background:rgba(12,18,34,.55);backdrop-filter:blur(2px);}"
+        + ".iptv6-root{position:fixed;inset:0;z-index:1000;background:linear-gradient(180deg,#0b1020,#090d18);color:#eef3ff;padding-top:4.6rem;overflow:hidden;box-sizing:border-box;}"
+        + ".iptv6-root *{box-sizing:border-box}"
+        + ".iptv6-grid{display:grid;grid-template-columns:16rem minmax(0,1fr) 19rem;height:100%;width:100%;min-width:0;}"
+        + ".iptv6-col{overflow:auto;overflow-x:hidden;min-width:0;border-right:1px solid rgba(125,147,195,.18);background:rgba(12,18,34,.55);backdrop-filter:blur(2px);}"
         + ".iptv6-col:last-child{border-right:none;background:rgba(8,13,26,.85);}"
         + ".iptv6-head{padding:.9rem 1rem;font-weight:700;position:sticky;top:0;background:rgba(12,18,34,.92);border-bottom:1px solid rgba(125,147,195,.2);z-index:2;}"
         + ".iptv6-item{margin:.45rem .6rem;padding:.8rem .85rem;border-radius:.75rem;background:rgba(35,52,90,.4);cursor:pointer;}"
@@ -223,9 +224,12 @@
         + ".iptv6-tab{flex:1;text-align:center;padding:.6rem;border-radius:.65rem;background:rgba(35,52,90,.4)}"
         + ".iptv6-tab.active{background:#3b69d8}"
         + ".iptv6-hidden{display:none!important}"
-        + ".iptv6-overlay{position:absolute;inset:4.6rem 0 0 0;background:rgba(4,8,18,.97);display:grid;grid-template-columns:22rem 1fr;z-index:5;}"
+        + ".iptv6-overlay{position:absolute;inset:4.6rem 0 0 0;background:rgba(4,8,18,.97);display:grid;grid-template-columns:20rem minmax(0,1fr);z-index:5;overflow:hidden;}"
         + ".iptv6-overlay.hidden{display:none}"
         + ".iptv6-input{margin:.7rem;width:calc(100% - 1.4rem);padding:.75rem;border:1px solid rgba(125,147,195,.35);border-radius:.6rem;background:#111a32;color:#fff;}"
+        + ".iptv6-kgrid{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:.45rem;padding:.7rem;}"
+        + ".iptv6-kcell{margin:0;padding:.65rem;text-align:center}"
+        + ".iptv6-kactions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.45rem;padding:.7rem;padding-top:0}"
         + "@media (max-width:980px){.iptv6-root{padding-top:4rem}.iptv6-tabs{display:flex}.iptv6-grid{display:block}.iptv6-col{height:auto;border-right:none;border-bottom:1px solid rgba(125,147,195,.18)}.iptv6-col.mobile-hide{display:none}.iptv6-overlay{grid-template-columns:1fr;inset:4rem 0 0 0}}";
       var st = document.createElement("style");
       st.id = CSS_ID;
@@ -261,12 +265,28 @@
       mobileTab: "left",
       epgFromPlaylist: "",
       epgStatus: "EPG не загружен",
+      epgProgress: "",
       epg: {}
     };
     var view = "browser";
     var overlayItems = [];
     var overlayIndex = 0;
+    var keyboardLang = "en";
+    var keyboardValue = "";
+    var keyboardMode = "search";
+    var keyboardTitle = "";
+    var keyIndex = 0;
     var controllerReady = false;
+    var KEYBOARDS = {
+      en: ["q","w","e","r","t","y","u","i","o","p","a","s","d","f","g","h","j","k","l","@","z","x","c","v","b","n","m",".","/","-","0","1","2","3","4","5","6","7","8","9"],
+      ru: ["й","ц","у","к","е","н","г","ш","щ","з","ф","ы","в","а","п","р","о","л","д","ж","я","ч","с","м","и","т","ь","б","ю","э","0","1","2","3","4","5","6","7","8","9"]
+    };
+    var KEY_ACTIONS = [
+      { code: "space", title: "Пробел" },
+      { code: "backspace", title: "Стереть" },
+      { code: "lang", title: "EN/RU" },
+      { code: "submit", title: "Готово" }
+    ];
 
     function currentPlaylist() { return playlistManager.getCurrent(config); }
     function isMobile() { return window.innerWidth <= 980; }
@@ -291,7 +311,8 @@
       state.leftItems = [
         { type: "action", title: "Добавить плейлист", action: "add" },
         { type: "action", title: "Список плейлистов", action: "playlists" },
-        { type: "action", title: "Поиск", action: "search" }
+        { type: "action", title: "Поиск", action: "search" },
+        { type: "action", title: "EPG URL", action: "epg_url" }
       ];
       Object.keys(state.groups).forEach(function (g) {
         state.leftItems.push({ type: "group", group: g, title: g === "STAR_FAVORITES" ? "Избранное" : g, count: (state.groups[g] || []).length });
@@ -304,6 +325,7 @@
       state.rightItems = [
         { action: "play", title: "Смотреть" },
         { action: "favorite", title: favoritesManager.has(config, ch) ? "Убрать из избранного" : "Добавить в избранное" },
+        { action: "epg_refresh", title: "Обновить EPG" },
         { action: "remove", title: "Удалить текущий плейлист" }
       ];
       if (state.rightIndex >= state.rightItems.length) state.rightIndex = 0;
@@ -355,7 +377,14 @@
         if (state.activeColumn === "left") ensureVisible(leftCol, leftCol.find(".iptv6-item").eq(state.leftIndex).addClass("active"));
         if (state.activeColumn === "center") ensureVisible(centerCol, centerCol.find(".iptv6-item").eq(state.centerIndex).addClass("active"));
         if (state.activeColumn === "right") ensureVisible(rightCol, rightCol.find(".iptv6-item").eq(state.rightIndex).addClass("active"));
-      } else ensureVisible(ovLeft, ovLeft.find(".iptv6-item").eq(overlayIndex).addClass("active"));
+      } else if (view === "playlists") {
+        ensureVisible(ovLeft, ovLeft.find(".iptv6-item").eq(overlayIndex).addClass("active"));
+      } else if (view === "input") {
+        ovRight.find(".iptv6-kcell").removeClass("active");
+        ovRight.find(".iptv6-kactions .iptv6-item").removeClass("active");
+        if (keyIndex < keysList().length) ensureVisible(ovRight, ovRight.find(".iptv6-kcell").eq(keyIndex).addClass("active"));
+        else ensureVisible(ovRight, ovRight.find(".iptv6-kactions .iptv6-item").eq(keyIndex - keysList().length).addClass("active"));
+      }
     }
 
     function bindClick(el, fn) { el.on("click", function (e) { e.preventDefault(); e.stopPropagation(); fn(); }); }
@@ -381,6 +410,10 @@
             if (it.action === "add") openInput("add", "Введите URL M3U", "http://");
             if (it.action === "search") openInput("search", "Поиск канала", "");
             if (it.action === "playlists") openPlaylists();
+            if (it.action === "epg_url") {
+              var pl = currentPlaylist();
+              openInput("epg", "Введите EPG URL", pl ? (config.epgOverrides[pl.url] || state.epgFromPlaylist || "") : "");
+            }
           } else selectGroup(it.group, true);
         });
         leftCol.append(row);
@@ -389,7 +422,7 @@
     function renderCenterColumn() {
       centerCol.empty();
       var title = config.lastGroup === "STAR_FAVORITES" ? "Избранное" : config.lastGroup;
-      centerCol.append($('<div class="iptv6-head"></div>').text(title || "Каналы"));
+      centerCol.append($('<div class="iptv6-head"></div>').text((title || "Каналы") + " · " + state.epgStatus));
       if (!state.currentChannels.length) return centerCol.append($('<div class="iptv6-meta"></div>').text("Список пуст"));
       state.currentChannels.forEach(function (ch, idx) {
         var ep = epgManager.findForChannel(state, ch);
@@ -414,6 +447,7 @@
       rightCol.append($('<div class="iptv6-meta" style="font-size:1.1rem;font-weight:700"></div>').text(ch.name || "Без названия"));
       rightCol.append($('<div class="iptv6-meta"></div>').text("Группа: " + (ch.group || "ОБЩИЕ")));
       rightCol.append($('<div class="iptv6-meta"></div>').text(state.epgStatus));
+      rightCol.append($('<div class="iptv6-meta"></div>').text(state.epgProgress || ""));
       var ep = epgManager.findForChannel(state, ch);
       if (ep && ep[0]) rightCol.append($('<div class="iptv6-meta"></div>').text("Сейчас: " + fmtTime(ep[0].start) + " " + ep[0].title));
       if (ep && ep[1]) rightCol.append($('<div class="iptv6-meta"></div>').text("Далее: " + fmtTime(ep[1].start) + " " + ep[1].title));
@@ -430,6 +464,7 @@
             save(); notify(add ? "Добавлено в избранное" : "Удалено из избранного");
             rebuildGroups(); buildLeft(); syncGroup();
           }
+          if (it.action === "epg_refresh") loadEpg(true);
           if (it.action === "remove") {
             var pl = currentPlaylist();
             if (!pl) return;
@@ -478,47 +513,103 @@
 
     function openInput(mode, title, startValue) {
       view = "input"; overlay.removeClass("hidden"); ovLeft.empty(); ovRight.empty();
-      ovLeft.append($('<div class="iptv6-head"></div>').text(title));
-      var input = $('<input class="iptv6-input" />').val(startValue || "");
-      ovRight.append($('<div class="iptv6-head"></div>').text(mode === "add" ? "Новый плейлист" : "Поиск"));
-      ovRight.append(input);
-      var ok = $('<div class="iptv6-item iptv6-cta"></div>').text("Готово");
-      bindClick(ok, function () {
-        var v = safe(input.val()).trim();
-        if (mode === "add") {
-          if (!validHttp(v)) return notify("Некорректный URL");
-          config.playlists.push({ id: "u_" + Date.now(), name: "Плейлист " + (config.playlists.length + 1), url: v, locked: false, hidden: false });
-          config.currentPlaylist = config.playlists.length - 1;
-          save(); closeOverlay(); loadPlaylist();
-        } else {
-          state.currentChannels = state.channels.filter(function (ch) { return normalize(ch.name).indexOf(normalize(v)) >= 0; });
-          state.centerIndex = 0; state.rightIndex = 0; state.activeColumn = "center";
-          if (isMobile()) state.mobileTab = "center";
-          closeOverlay(); renderBrowser();
-          if (!state.currentChannels.length) notify("Ничего не найдено");
-        }
+      keyboardMode = mode;
+      keyboardTitle = title;
+      keyboardValue = startValue || "";
+      keyboardLang = mode === "search" ? "ru" : "en";
+      keyIndex = 0;
+      renderKeyboardOverlay();
+    }
+    function keysList() { return KEYBOARDS[keyboardLang]; }
+    function totalKeys() { return keysList().length + KEY_ACTIONS.length; }
+    function submitKeyboard() {
+      var v = safe(keyboardValue).trim();
+      if (keyboardMode === "add") {
+        if (!validHttp(v)) return notify("Некорректный URL");
+        config.playlists.push({ id: "u_" + Date.now(), name: "Плейлист " + (config.playlists.length + 1), url: v, locked: false, hidden: false });
+        config.currentPlaylist = config.playlists.length - 1;
+        save(); closeOverlay(); loadPlaylist();
+        return;
+      }
+      if (keyboardMode === "epg") {
+        var pl = currentPlaylist();
+        if (!pl) return notify("Плейлист не выбран");
+        if (v && !validHttp(v)) return notify("Некорректный EPG URL");
+        if (v) config.epgOverrides[pl.url] = v; else delete config.epgOverrides[pl.url];
+        save();
+        closeOverlay();
+        loadEpg(true);
+        return;
+      }
+      state.currentChannels = state.channels.filter(function (ch) { return normalize(ch.name).indexOf(normalize(v)) >= 0; });
+      state.centerIndex = 0; state.rightIndex = 0; state.activeColumn = "center";
+      if (isMobile()) state.mobileTab = "center";
+      closeOverlay(); renderBrowser();
+      if (!state.currentChannels.length) notify("Ничего не найдено");
+    }
+    function applyKey(code, char) {
+      if (code === "char") keyboardValue += char;
+      else if (code === "space") keyboardValue += " ";
+      else if (code === "backspace") keyboardValue = keyboardValue.slice(0, -1);
+      else if (code === "lang") keyboardLang = keyboardLang === "en" ? "ru" : "en";
+      else if (code === "submit") return submitKeyboard();
+      renderKeyboardOverlay();
+    }
+    function renderKeyboardOverlay() {
+      ovLeft.empty(); ovRight.empty();
+      ovLeft.append($('<div class="iptv6-head"></div>').text(keyboardTitle));
+      ovLeft.append($('<div class="iptv6-meta"></div>').text("Экранная клавиатура"));
+      ovRight.append($('<div class="iptv6-head"></div>').text((keyboardMode === "add" ? "Новый плейлист" : keyboardMode === "epg" ? "EPG URL" : "Поиск") + " · " + keyboardLang.toUpperCase()));
+      ovRight.append($('<div class="iptv6-input" style="pointer-events:none"></div>').text(keyboardValue || " "));
+      var grid = $('<div class="iptv6-kgrid"></div>');
+      keysList().forEach(function (k, i) {
+        var b = $('<div class="iptv6-item iptv6-kcell"></div>').text(k);
+        bindClick(b, function () { keyIndex = i; applyKey("char", k); });
+        grid.append(b);
       });
-      var cancel = $('<div class="iptv6-item"></div>').text("Отмена");
-      bindClick(cancel, closeOverlay);
-      ovRight.append(ok, cancel);
-      setTimeout(function () { try { input.focus(); } catch (e) {} }, 40);
+      ovRight.append(grid);
+      var actions = $('<div class="iptv6-kactions"></div>');
+      KEY_ACTIONS.forEach(function (a, i) {
+        var b = $('<div class="iptv6-item"></div>').text(a.title);
+        bindClick(b, function () { keyIndex = keysList().length + i; applyKey(a.code); });
+        actions.append(b);
+      });
+      ovRight.append(actions);
+      var close = $('<div class="iptv6-item"></div>').text("Отмена");
+      bindClick(close, closeOverlay);
+      ovRight.append(close);
+      updateFocus();
     }
     function closeOverlay() { view = "browser"; overlay.addClass("hidden"); updateFocus(); }
 
-    function loadEpg() {
+    function loadEpg(force) {
       var pl = currentPlaylist();
       if (!pl) return;
       var url = config.epgOverrides[pl.url] || state.epgFromPlaylist || "";
-      if (!validHttp(url)) return;
-      requestText(requester, url, 25000, function (xml) {
-        epgManager.parseXml(state, xml || "", url);
+      if (!validHttp(url)) {
+        state.epgStatus = "EPG не задан";
+        state.epgProgress = "Укажите EPG URL в левом меню";
         renderCenterColumn(); renderRightColumn(); updateFocus();
-      }, function () { state.epgStatus = "EPG: ошибка загрузки"; renderRightColumn(); updateFocus(); });
+        return;
+      }
+      state.epgStatus = "EPG загружается...";
+      state.epgProgress = "Источник: " + url;
+      renderCenterColumn(); renderRightColumn(); updateFocus();
+      requestText(requester, url, 25000, function (xml) {
+        var ok = epgManager.parseXml(state, xml || "", url);
+        state.epgProgress = ok ? ("Обновлено: " + new Date().toLocaleTimeString()) : "EPG без передач";
+        renderCenterColumn(); renderRightColumn(); updateFocus();
+      }, function () {
+        state.epgStatus = "EPG: ошибка загрузки";
+        state.epgProgress = "Источник недоступен";
+        renderCenterColumn(); renderRightColumn(); updateFocus();
+      });
     }
     function loadPlaylist() {
       var pl = currentPlaylist();
       if (!pl || !validHttp(pl.url)) return notify("Нет доступного плейлиста");
       epgManager.reset(state);
+      state.epgProgress = "";
       requestText(requester, pl.url, 22000, function (text) {
         var parsed = parserM3U.parse(text || "");
         state.channels = parsed.channels;
@@ -543,7 +634,8 @@
               if (state.activeColumn === "left" && state.leftIndex > 0) state.leftIndex--;
               else if (state.activeColumn === "center" && state.centerIndex > 0) { state.centerIndex--; renderRightColumn(); }
               else if (state.activeColumn === "right" && state.rightIndex > 0) state.rightIndex--;
-            } else if (view === "playlists" || view === "input") { if (overlayIndex > 0) overlayIndex--; }
+            } else if (view === "playlists") { if (overlayIndex > 0) overlayIndex--; }
+            else if (view === "input") { if (keyIndex >= 10) keyIndex -= 10; }
             updateFocus();
           },
           down: function () {
@@ -551,10 +643,12 @@
               if (state.activeColumn === "left" && state.leftIndex < state.leftItems.length - 1) state.leftIndex++;
               else if (state.activeColumn === "center" && state.centerIndex < state.currentChannels.length - 1) { state.centerIndex++; renderRightColumn(); }
               else if (state.activeColumn === "right" && state.rightIndex < state.rightItems.length - 1) state.rightIndex++;
-            } else if (view === "playlists" || view === "input") { if (overlayIndex < overlayItems.length - 1) overlayIndex++; }
+            } else if (view === "playlists") { if (overlayIndex < overlayItems.length - 1) overlayIndex++; }
+            else if (view === "input") { var nk = keyIndex + 10; if (nk < totalKeys()) keyIndex = nk; }
             updateFocus();
           },
           left: function () {
+            if (view === "input") { if (keyIndex > 0) keyIndex--; return updateFocus(); }
             if (view !== "browser") return;
             if (state.activeColumn === "right") { state.activeColumn = "center"; if (isMobile()) state.mobileTab = "center"; }
             else if (state.activeColumn === "center") { state.activeColumn = "left"; if (isMobile()) state.mobileTab = "left"; }
@@ -562,6 +656,7 @@
             applyMobile(); updateFocus();
           },
           right: function () {
+            if (view === "input") { if (keyIndex < totalKeys() - 1) keyIndex++; return updateFocus(); }
             if (view !== "browser") return;
             if (state.activeColumn === "left") { var it = state.leftItems[state.leftIndex]; if (it && it.type === "group") { state.activeColumn = "center"; if (isMobile()) state.mobileTab = "center"; } }
             else if (state.activeColumn === "center" && state.currentChannels.length) { state.activeColumn = "right"; if (isMobile()) state.mobileTab = "right"; }
@@ -576,17 +671,25 @@
                 else if (li.action === "add") openInput("add", "Введите URL M3U", "http://");
                 else if (li.action === "search") openInput("search", "Поиск канала", "");
                 else if (li.action === "playlists") openPlaylists();
+                else if (li.action === "epg_url") {
+                  var cpl = currentPlaylist();
+                  openInput("epg", "Введите EPG URL", cpl ? (config.epgOverrides[cpl.url] || state.epgFromPlaylist || "") : "");
+                }
               } else if (state.activeColumn === "center") {
                 if (state.currentChannels.length) { state.activeColumn = "right"; if (isMobile()) state.mobileTab = "right"; applyMobile(); }
               } else if (state.activeColumn === "right") {
                 var ri = state.rightItems[state.rightIndex]; if (!ri) return;
                 if (ri.action === "play") playerController.play(selectedChannel());
                 if (ri.action === "favorite") { var add = favoritesManager.toggle(config, selectedChannel()); save(); notify(add ? "Добавлено в избранное" : "Удалено из избранного"); rebuildGroups(); buildLeft(); syncGroup(); }
+                if (ri.action === "epg_refresh") loadEpg(true);
                 if (ri.action === "remove") { var p = currentPlaylist(); if (p && !p.locked) { config.playlists.splice(config.currentPlaylist, 1); if (config.currentPlaylist >= config.playlists.length) config.currentPlaylist = Math.max(0, config.playlists.length - 1); save(); loadPlaylist(); } else notify("Default-плейлист нельзя удалить"); }
               }
             } else if (view === "playlists") {
               var pl = overlayItems[overlayIndex];
               if (pl && !pl.hidden) { config.currentPlaylist = pl.index; save(); closeOverlay(); loadPlaylist(); }
+            } else if (view === "input") {
+              if (keyIndex < keysList().length) applyKey("char", keysList()[keyIndex]);
+              else applyKey(KEY_ACTIONS[keyIndex - keysList().length].code);
             }
             updateFocus();
           },
@@ -603,6 +706,9 @@
               if (cp.locked) cp.hidden = !cp.hidden; else if (config.playlists.length > 1) config.playlists.splice(sp.index, 1);
               if (config.currentPlaylist >= config.playlists.length) config.currentPlaylist = Math.max(0, config.playlists.length - 1);
               save(); openPlaylists(); loadPlaylist();
+            } else if (view === "input") {
+              keyboardValue = keyboardValue.slice(0, -1);
+              renderKeyboardOverlay();
             } else {
               var ch = selectedChannel();
               if (!ch) return;
