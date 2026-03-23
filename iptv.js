@@ -270,6 +270,11 @@
                         name: 'PRISMA',
                         url: 'https://gist.axenov.dev/PRISMA/f332731d327f41149cbfcecefeda4591/download/HEAD/PRISMA.m3u',
                         locked: true
+                    },
+                    {
+                        name: 'PRISMA',
+                        url: 'https://raw.githubusercontent.com/Artrax90/m3ucreator/refs/heads/main/pl.m3u',
+                        locked: true
                     }
                 ],
                 favorites: [],
@@ -2248,3 +2253,4 @@
         });
     }
 })();
+
