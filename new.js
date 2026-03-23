@@ -18,6 +18,12 @@
     { id: "d3", name: "RU IPTV Org", url: "https://iptv-org.github.io/iptv/countries/ru.m3u", locked: true, hidden: false },
     { id: "d4", name: "PRISMA", url: "https://gist.axenov.dev/PRISMA/f332731d327f41149cbfcecefeda4591/download/HEAD/PRISMA.m3u", locked: true, hidden: false }
   ];
+  var EPG_FALLBACK_URLS = [
+    "https://iptv-org.github.io/epg/guides/ru.xml",
+    "https://iptvx.one/EPG_LITE",
+    "https://iptvx.one/EPG",
+    "https://iptvx.one/EPG_NOARCH"
+  ];
 
   function log(tag, err) {
     try { console.error("[IPTV]", tag, err || ""); } catch (e) {}
@@ -598,25 +604,51 @@
     function loadEpg(force) {
       var pl = currentPlaylist();
       if (!pl) return;
-      var url = config.epgOverrides[pl.url] || state.epgFromPlaylist || "";
-      if (!validHttp(url)) {
+      var seen = {};
+      var candidates = [];
+      function addCandidate(url) {
+        var u = safe(url).trim();
+        if (!validHttp(u) || seen[u]) return;
+        seen[u] = true;
+        candidates.push(u);
+      }
+      addCandidate(config.epgOverrides[pl.url] || "");
+      addCandidate(state.epgFromPlaylist || "");
+      EPG_FALLBACK_URLS.forEach(addCandidate);
+
+      if (!candidates.length) {
         state.epgStatus = "EPG не задан";
         state.epgProgress = "Укажите EPG URL в левом меню";
         renderCenterColumn(); renderRightColumn(); updateFocus();
         return;
       }
       state.epgStatus = "EPG загружается...";
-      state.epgProgress = "Источник: " + url;
+      state.epgProgress = "Поиск рабочего источника...";
       renderCenterColumn(); renderRightColumn(); updateFocus();
-      requestText(requester, url, 25000, function (xml) {
-        var ok = epgManager.parseXml(state, xml || "", url);
-        state.epgProgress = ok ? ("Обновлено: " + new Date().toLocaleTimeString()) : "EPG без передач";
+      function tryEpg(index) {
+        if (index >= candidates.length) {
+          state.epgStatus = "EPG недоступен";
+          state.epgProgress = "Источник недоступен";
+          renderCenterColumn(); renderRightColumn(); updateFocus();
+          return;
+        }
+        var url = candidates[index];
+        state.epgProgress = "Источник " + (index + 1) + "/" + candidates.length + ": " + url;
         renderCenterColumn(); renderRightColumn(); updateFocus();
-      }, function () {
-        state.epgStatus = "EPG: ошибка загрузки";
-        state.epgProgress = "Источник недоступен";
-        renderCenterColumn(); renderRightColumn(); updateFocus();
-      });
+        requestText(requester, url, 15000, function (xml) {
+          var ok = epgManager.parseXml(state, xml || "", url);
+          if (ok) {
+            state.epgStatus = "EPG загружен";
+            state.epgProgress = "Обновлено: " + new Date().toLocaleTimeString();
+            renderCenterColumn(); renderRightColumn(); updateFocus();
+          } else {
+            tryEpg(index + 1);
+          }
+        }, function () {
+          tryEpg(index + 1);
+        });
+      }
+      tryEpg(0);
     }
     function loadPlaylist() {
       var pl = currentPlaylist();
