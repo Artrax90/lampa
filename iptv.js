@@ -1,13 +1,13 @@
 // ==Lampa==
 // name: IPTV PRO Universal
-// version: 4.0.8
+// version: 4.0.9
 // ==/Lampa==
 
 (function () {
     'use strict';
 
     function IPTVUniversal() {
-        var storage_key = 'iptv_universal_v408';
+        var storage_key = 'iptv_universal_v409';
         var controller_name = 'iptv_universal';
 
         var root;
@@ -18,6 +18,7 @@
         var overlay;
         var mobileTabs;
         var requester = createRequester();
+
         var lastTouchAction = {
             tag: '',
             time: 0
@@ -48,10 +49,16 @@
             'первый hd': { epg: 'pervy' },
             'первый канал европа': { epg: 'pervy' },
             'первый канал +1': { epg: 'pervy-pl1' },
+            'первый канал +2': { epg: 'pervy-pl2' },
+            'первый канал +3': { epg: 'pervy-pl3' },
             'первый канал +4': { epg: 'pervy-pl4' },
+            'первый канал +5': { epg: 'pervy-pl5' },
             'первый канал +6': { epg: 'pervy-pl6' },
             'первый канал (+1)': { epg: 'pervy-pl1' },
+            'первый канал (+2)': { epg: 'pervy-pl2' },
+            'первый канал (+3)': { epg: 'pervy-pl3' },
             'первый канал (+4)': { epg: 'pervy-pl4' },
+            'первый канал (+5)': { epg: 'pervy-pl5' },
             'первый канал (+6)': { epg: 'pervy-pl6' },
             'первый': { epg: 'pervy' },
 
@@ -210,7 +217,9 @@
             programsById: {},
             namesMap: {},
             iconById: {},
-            iconByName: {}
+            iconByName: {},
+            pageProgramsById: {},
+            pagePendingById: {}
         };
 
         var DEFAULT_EPG_URL = 'https://iptvx.one/EPG_LITE';
@@ -553,9 +562,11 @@
 
         function isFavorite(channel) {
             if (!channel || !channel.url) return false;
+
             for (var i = 0; i < config.favorites.length; i++) {
                 if (config.favorites[i].url === channel.url) return true;
             }
+
             return false;
         }
 
@@ -615,12 +626,32 @@
             return '';
         }
 
-        function epgStatusText() {
+        function epgStatusText(channel, epgMatch) {
+            var meta = getManualChannelMeta(channel);
+            var pageId = meta && meta.epg ? meta.epg : (channel && channel.id ? channel.id : '');
+
+            if (epgMatch && epgMatch.length) {
+                if (epg.pageProgramsById[pageId]) return 'EPG: страница канала';
+                return 'EPG: загружен';
+            }
+
+            if (pageId && epg.pagePendingById[pageId]) return 'EPG: загрузка канала...';
             if (state.epgStatus.state === 'loaded') return 'EPG: загружен';
             if (state.epgStatus.state === 'loaded_empty') return 'EPG: файл пустой';
             if (state.epgStatus.state === 'error') return 'EPG: ошибка загрузки';
             if (state.epgStatus.state === 'loading') return 'EPG: загрузка...';
             return 'EPG: не загружен';
+        }
+
+        function epgSourceText(channel, epgMatch) {
+            var meta = getManualChannelMeta(channel);
+            var pageId = meta && meta.epg ? meta.epg : (channel && channel.id ? channel.id : '');
+
+            if (epgMatch && epgMatch.length && pageId && epg.pageProgramsById[pageId]) {
+                return 'https://epg.iptvx.one/id/' + pageId;
+            }
+
+            return state.epgStatus.url || '';
         }
 
         function epgCandidates() {
@@ -643,6 +674,133 @@
             return list;
         }
 
+        function parseRuMonth(value) {
+            var months = {
+                'января': 0,
+                'февраля': 1,
+                'марта': 2,
+                'апреля': 3,
+                'мая': 4,
+                'июня': 5,
+                'июля': 6,
+                'августа': 7,
+                'сентября': 8,
+                'октября': 9,
+                'ноября': 10,
+                'декабря': 11
+            };
+
+            return months[value] != null ? months[value] : -1;
+        }
+
+        function parseChannelPagePrograms(html) {
+            var doc = new DOMParser().parseFromString(html, 'text/html');
+            var text = safeText(doc.body ? doc.body.textContent : '');
+            var lines = text.split(/\r?\n/).map(function (line) {
+                return line.replace(/\s+/g, ' ').trim();
+            }).filter(Boolean);
+            var started = false;
+            var currentDate = null;
+            var programs = [];
+            var i;
+
+            for (i = 0; i < lines.length; i++) {
+                var line = lines[i];
+
+                if (!started) {
+                    if (line.indexOf('Программа показана') >= 0) started = true;
+                    continue;
+                }
+
+                var dayMatch = line.match(/^(Понедельник|Вторник|Среда|Четверг|Пятница|Суббота|Воскресенье),\s+(\d{1,2})\s+([а-яё]+)\s+(\d{4})\s*г\.?$/i);
+                if (dayMatch) {
+                    var day = parseInt(dayMatch[2], 10);
+                    var month = parseRuMonth(dayMatch[3].toLowerCase());
+                    var year = parseInt(dayMatch[4], 10);
+
+                    if (month >= 0) currentDate = { year: year, month: month, day: day };
+                    continue;
+                }
+
+                var timeMatch = line.match(/^(\d{2}:\d{2})\s+(.+)$/);
+                if (timeMatch && currentDate) {
+                    var hm = timeMatch[1].split(':');
+                    var title = timeMatch[2].trim();
+                    var start = new Date(currentDate.year, currentDate.month, currentDate.day, parseInt(hm[0], 10), parseInt(hm[1], 10), 0);
+
+                    programs.push({
+                        title: title,
+                        start: start,
+                        stop: null
+                    });
+                }
+            }
+
+            programs.sort(function (a, b) {
+                return a.start.getTime() - b.start.getTime();
+            });
+
+            for (i = 0; i < programs.length; i++) {
+                programs[i].stop = programs[i + 1] ? programs[i + 1].start : new Date(programs[i].start.getTime() + 3600000);
+            }
+
+            return programs;
+        }
+
+        function selectCurrentPrograms(programs) {
+            var now = Date.now();
+            var i;
+
+            if (!programs || !programs.length) return null;
+
+            for (i = 0; i < programs.length; i++) {
+                var current = programs[i];
+                var next = programs[i + 1] || null;
+
+                if (now >= current.start.getTime() && now < current.stop.getTime()) {
+                    return [current, next].filter(Boolean);
+                }
+
+                if (now < current.start.getTime()) {
+                    return [current, next].filter(Boolean);
+                }
+            }
+
+            return [programs[programs.length - 1]];
+        }
+
+        function ensureChannelPageEpg(channel) {
+            var meta = getManualChannelMeta(channel);
+            var epgId = meta && meta.epg ? meta.epg : (channel && channel.id ? channel.id : '');
+
+            if (!epgId) return;
+            if (epg.pageProgramsById[epgId]) return;
+            if (epg.pagePendingById[epgId]) return;
+
+            epg.pagePendingById[epgId] = true;
+
+            requestText('https://epg.iptvx.one/id/' + epgId, 20000, function (html) {
+                delete epg.pagePendingById[epgId];
+
+                runSafe('parseChannelPagePrograms', function () {
+                    var programs = parseChannelPagePrograms(html || '');
+
+                    if (programs && programs.length) {
+                        epg.pageProgramsById[epgId] = programs;
+                    }
+
+                    renderCenter();
+                    renderRight();
+                    updateFocus();
+                });
+            }, function (err) {
+                delete epg.pagePendingById[epgId];
+                logError('ensureChannelPageEpg', { id: epgId, error: err });
+                renderRight();
+                updateFocus();
+            });
+        }
+
         function ensureStyles() {
             if ($('#iptv-universal-style').length) return;
 
@@ -654,7 +812,7 @@
                 '.iptv-left{width:23rem;}' +
                 '.iptv-center{flex:1;}' +
                 '.iptv-right{width:26rem;padding:1.5rem;border-right:none;background:#080a0d;}' +
-                '.iptv-head{padding:1rem;font-size:1.25rem;font-weight:700;}' +
+                '.iptv-head{padding:1rem;font-size:1.25rem;font-weight:700;display:flex;align-items:center;gap:0.75rem;}' +
                 '.iptv-sub{padding:0 1rem 0.75rem 1rem;color:rgba(255,255,255,0.6);font-size:0.92rem;}' +
                 '.iptv-item,.iptv-key,.iptv-kbtn,.iptv-tab{margin:0.35rem;padding:0.95rem;border-radius:0.55rem;background:rgba(255,255,255,0.05);cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation;}' +
                 '.iptv-item.active,.iptv-key.active,.iptv-kbtn.active,.iptv-tab.active{background:#2962ff!important;}' +
@@ -683,6 +841,8 @@
                 '.iptv-kbtn{margin:0;text-align:center;}' +
                 '.iptv-tabs{display:none;gap:0.5rem;padding:0.75rem;background:#0b0d10;border-bottom:1px solid rgba(255,255,255,0.08);}' +
                 '.iptv-tab{margin:0;text-align:center;flex:1;}' +
+                '.iptv-plugin-ico{width:2rem;height:2rem;display:inline-flex;align-items:center;justify-content:center;border-radius:0.55rem;background:linear-gradient(135deg,#1e4fff,#00b3ff);box-shadow:0 0.4rem 1rem rgba(0,90,255,0.3);flex:0 0 2rem;}' +
+                '.iptv-plugin-ico svg{width:1.2rem;height:1.2rem;display:block;fill:#fff;}' +
                 '@media (max-width: 980px){' +
                 '.iptv-root{padding-top:4rem;overflow-y:auto;}' +
                 '.iptv-tabs{display:flex;position:sticky;top:0;z-index:15;}' +
@@ -699,7 +859,7 @@
         }
 
         function bindAction(el, tag, handler) {
-            if (!isTouchDevice()) el.addClass('selector');
+            el.addClass('selector');
 
             el.on(actionEvents(), function (e) {
                 e.preventDefault();
@@ -755,6 +915,14 @@
                 key = normalizeName(names[i]);
                 byNameId = epg.namesMap[key];
                 if (byNameId && epg.programsById[byNameId]) return epg.programsById[byNameId];
+            }
+
+            if (meta && meta.epg && epg.pageProgramsById[meta.epg]) {
+                return selectCurrentPrograms(epg.pageProgramsById[meta.epg]);
+            }
+
+            if (id && epg.pageProgramsById[id]) {
+                return selectCurrentPrograms(epg.pageProgramsById[id]);
             }
 
             return null;
@@ -859,6 +1027,9 @@
             epg.namesMap = {};
             epg.iconById = {};
             epg.iconByName = {};
+            epg.pageProgramsById = {};
+            epg.pagePendingById = {};
+
             state.epgLoaded = false;
             state.epgStatus = {
                 state: 'idle',
@@ -894,6 +1065,8 @@
                 renderRight();
                 renderCenter();
                 updateFocus();
+
+                ensureChannelPageEpg(selectedChannel());
                 return;
             }
 
@@ -1156,7 +1329,12 @@
 
         function renderLeft() {
             leftCol.empty();
-            leftCol.append($('<div class="iptv-head"></div>').text(currentPlaylist() ? currentPlaylist().name : 'IPTV'));
+
+            var head = $('<div class="iptv-head"></div>');
+            head.append(menuIcon());
+            head.append($('<span></span>').text(currentPlaylist() ? currentPlaylist().name : 'IPTV'));
+            leftCol.append(head);
+
             leftCol.append($('<div class="iptv-sub"></div>').text('Действия и группы'));
 
             state.leftItems.forEach(function (item, index) {
@@ -1219,24 +1397,30 @@
             rightCol.append($('<div class="iptv-head"></div>').text('Инфо'));
 
             var channel = selectedChannel();
-            var epgMatch = getMatchedEpg(channel);
+            var epgMatch;
             var epgBox;
             var logo;
+            var sourceText;
 
             if (!channel) {
                 rightCol.append($('<div class="iptv-empty"></div>').text('Выберите канал'));
                 return;
             }
 
+            epgMatch = getMatchedEpg(channel);
+            if (!epgMatch || !epgMatch.length) ensureChannelPageEpg(channel);
+
+            epgMatch = getMatchedEpg(channel);
+
             logo = resolveChannelLogo(channel);
             if (logo) rightCol.append($('<img class="iptv-logo iptv-logo--big" alt="">').attr('src', logo));
 
             rightCol.append($('<div class="iptv-title"></div>').text(channel.name));
             rightCol.append($('<div class="iptv-meta"></div>').text('Группа: ' + channel.group));
-            rightCol.append($('<div class="iptv-meta"></div>').text(epgStatusText()));
-            if (state.epgStatus.url) {
-                rightCol.append($('<div class="iptv-meta"></div>').text('Источник: ' + state.epgStatus.url));
-            }
+            rightCol.append($('<div class="iptv-meta"></div>').text(epgStatusText(channel, epgMatch)));
+
+            sourceText = epgSourceText(channel, epgMatch);
+            if (sourceText) rightCol.append($('<div class="iptv-meta"></div>').text('Источник: ' + sourceText));
 
             epgBox = $('<div class="iptv-epg"></div>');
             if (epgMatch && epgMatch.length) {
@@ -1910,6 +2094,16 @@
             }
         }
 
+        function menuIcon() {
+            return $(
+                '<div class="iptv-plugin-ico" aria-hidden="true">' +
+                    '<svg viewBox="0 0 24 24">' +
+                        '<path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v6A2.5 2.5 0 0 1 17.5 15h-4.1l1.9 3H17a1 1 0 1 1 0 2H7a1 1 0 1 1 0-2h1.8l1.9-3H6.5A2.5 2.5 0 0 1 4 12.5v-6Zm2.5-.5a.5.5 0 0 0-.5.5v6c0 .28.22.5.5.5h11a.5.5 0 0 0 .5-.5v-6a.5.5 0 0 0-.5-.5h-11Z"/>' +
+                    '</svg>' +
+                '</div>'
+            );
+        }
+
         this.create = function () {
             ensureStyles();
 
@@ -1992,14 +2186,26 @@
         return 'hover:enter hover:click click';
     }
 
+    function pluginMenuIcon() {
+        return $(
+            '<div class="menu__ico">' +
+                '<div style="width:2rem;height:2rem;display:flex;align-items:center;justify-content:center;border-radius:0.55rem;background:linear-gradient(135deg,#1e4fff,#00b3ff);box-shadow:0 0.35rem 0.9rem rgba(0,90,255,0.3);">' +
+                    '<svg viewBox="0 0 24 24" style="width:1.15rem;height:1.15rem;fill:#fff;display:block;">' +
+                        '<path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v6A2.5 2.5 0 0 1 17.5 15h-4.1l1.9 3H17a1 1 0 1 1 0 2H7a1 1 0 1 1 0-2h1.8l1.9-3H6.5A2.5 2.5 0 0 1 4 12.5v-6Zm2.5-.5a.5.5 0 0 0-.5.5v6c0 .28.22.5.5.5h11a.5.5 0 0 0 .5-.5v-6a.5.5 0 0 0-.5-.5h-11Z"/>' +
+                    '</svg>' +
+                '</div>' +
+            '</div>'
+        );
+    }
+
     function init() {
         try {
             Lampa.Component.add('iptv_universal', IPTVUniversal);
 
             if ($('.menu .menu__list').find('.iptv-universal-item').length) return;
 
-            var item = $('<li class="menu__item iptv-universal-item"></li>');
-            if (!isTouchDeviceGlobal()) item.addClass('selector');
+            var item = $('<li class="menu__item selector iptv-universal-item"></li>');
+            item.append(pluginMenuIcon());
             item.append($('<div class="menu__text"></div>').text('IPTV PRO'));
 
             item.on(menuOpenEventsGlobal(), function (e) {
