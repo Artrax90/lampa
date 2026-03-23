@@ -463,25 +463,55 @@
       fallbackVideo = null;
     }
 
+    function tryLampaPlay(channel) {
+      if (!window.Lampa || !Lampa.Player) return false;
+      var stream = channel.streamUrl;
+      var title = channel.name || "IPTV";
+
+      var attempts = [
+        function () {
+          if (typeof Lampa.Player.play === "function") {
+            Lampa.Player.play(stream);
+            return true;
+          }
+          return false;
+        },
+        function () {
+          if (typeof Lampa.Player.play === "function") {
+            Lampa.Player.play({
+              title: title,
+              url: stream,
+              quality: { "Auto": stream },
+              timeline: 0
+            });
+            return true;
+          }
+          return false;
+        },
+        function () {
+          if (typeof Lampa.Player.open === "function") {
+            Lampa.Player.open(stream);
+            return true;
+          }
+          return false;
+        }
+      ];
+
+      for (var i = 0; i < attempts.length; i++) {
+        try {
+          if (attempts[i]()) return true;
+        } catch (e) {
+          utils.log("Lampa player attempt failed:", i + 1, e);
+        }
+      }
+      return false;
+    }
+
     function play(channel) {
       if (!channel || !channel.streamUrl) return;
       current = channel;
 
-      try {
-        if (window.Lampa && Lampa.Player && typeof Lampa.Player.play === "function") {
-          Lampa.Player.play({
-            title: channel.name,
-            url: channel.streamUrl,
-            quality: {
-              default: channel.streamUrl
-            },
-            timeline: 0
-          });
-          return;
-        }
-      } catch (e) {
-        utils.log("Lampa player play failed, fallback to HTML5", e);
-      }
+      if (tryLampaPlay(channel)) return;
 
       stopFallback();
       fallbackVideo = document.createElement("video");
@@ -499,6 +529,7 @@
       document.body.appendChild(fallbackVideo);
       fallbackVideo.play().catch(function (e) {
         utils.log("Fallback playback failed", e);
+        uiRenderer.notify("Не удалось открыть поток");
       });
       fallbackVideo.addEventListener("error", function () {
         uiRenderer.notify("Ошибка воспроизведения канала");
@@ -542,9 +573,10 @@
       if (document.getElementById(PLUGIN_ID + "_styles")) return;
       var css = [
         "." + PLUGIN_ID + "{position:fixed;inset:0;z-index:9990;background:#141821;color:#fff;font-family:Arial,sans-serif;display:flex;flex-direction:column;}",
-        "." + PLUGIN_ID + " .top{padding:10px;display:flex;gap:8px;align-items:center;background:#1b2230;}",
+        "." + PLUGIN_ID + " .top{padding:10px;display:flex;gap:8px;align-items:center;background:#1b2230;border-bottom:1px solid #27334a;}",
         "." + PLUGIN_ID + " input,." + PLUGIN_ID + " select,." + PLUGIN_ID + " button{background:#222b3c;color:#fff;border:1px solid #2f3b52;border-radius:8px;padding:8px 10px;font-size:14px;}",
         "." + PLUGIN_ID + " button{cursor:pointer;min-height:40px;}",
+        "." + PLUGIN_ID + " button:active{transform:translateY(1px);}",
         "." + PLUGIN_ID + " .grow{flex:1;}",
         "." + PLUGIN_ID + " .main{display:flex;gap:10px;flex:1;min-height:0;padding:10px;}",
         "." + PLUGIN_ID + " .left{width:260px;display:flex;flex-direction:column;gap:8px;}",
@@ -554,13 +586,14 @@
         "." + PLUGIN_ID + " .group.active{background:#2f6fe4;border-color:#5a93ff;}",
         "." + PLUGIN_ID + " .list{flex:1;min-height:0;position:relative;background:#101521;border:1px solid #2a3448;border-radius:10px;overflow:auto;}",
         "." + PLUGIN_ID + " .list-inner{position:relative;width:100%;}",
-        "." + PLUGIN_ID + " .row{position:absolute;left:0;right:0;height:72px;display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid #242f44;}",
-        "." + PLUGIN_ID + " .row.focused{background:#203458;}",
+        "." + PLUGIN_ID + " .row{position:absolute;left:0;right:0;height:72px;display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:1px solid #242f44;cursor:pointer;}",
+        "." + PLUGIN_ID + " .row:hover{background:#1a2844;}",
+        "." + PLUGIN_ID + " .row.focused{background:#203458;outline:1px solid #3f5d8f;}",
         "." + PLUGIN_ID + " .logo{width:64px;height:40px;object-fit:contain;background:#0d111a;border-radius:6px;}",
         "." + PLUGIN_ID + " .meta{display:flex;flex-direction:column;gap:3px;min-width:0;}",
         "." + PLUGIN_ID + " .name{font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}",
         "." + PLUGIN_ID + " .epg{font-size:12px;color:#9bb5e6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}",
-        "." + PLUGIN_ID + " .fav{margin-left:auto;font-size:20px;color:#ffd966;}",
+        "." + PLUGIN_ID + " .fav{margin-left:auto;font-size:20px;color:#ffd966;min-width:36px;text-align:center;}",
         "." + PLUGIN_ID + " .status{font-size:12px;color:#9bb5e6;padding:0 10px 10px;}",
         "." + PLUGIN_ID + " .panel{background:#111828;border:1px solid #2b3751;border-radius:10px;padding:10px;}",
         "." + PLUGIN_ID + " .hidden{display:none!important;}",
@@ -619,7 +652,7 @@
         );
 
       listViewport.addEventListener("scroll", renderVirtualRows);
-      listViewport.addEventListener("click", function (e) {
+      function onListActivate(e) {
         var row = e.target.closest(".row");
         if (!row) return;
         var idx = Number(row.getAttribute("data-index"));
@@ -633,7 +666,10 @@
           return;
         }
         playerController.play(channel);
-      });
+      }
+
+      listViewport.addEventListener("click", onListActivate);
+      listViewport.addEventListener("touchend", onListActivate, { passive: true });
     }
 
     function bindRemoteEvents() {
@@ -646,6 +682,8 @@
 
     function onKeyDown(e) {
       if (!root || !document.body.contains(root)) return;
+      var tag = (e.target && e.target.tagName ? e.target.tagName : "").toLowerCase();
+      if (tag === "input" || tag === "textarea" || tag === "select" || tag === "button") return;
       if (e.key === "ArrowDown") {
         e.preventDefault();
         APP_STATE.selectedIndex = Math.min(APP_STATE.filteredChannels.length - 1, APP_STATE.selectedIndex + 1);
@@ -989,6 +1027,18 @@
     document.body.appendChild(btn);
   }
 
+  function addParamSafe(payload) {
+    try {
+      if (Lampa.SettingsApi && typeof Lampa.SettingsApi.addParam === "function") {
+        Lampa.SettingsApi.addParam(payload);
+        return true;
+      }
+    } catch (e) {
+      utils.log("addParam failed", e);
+    }
+    return false;
+  }
+
   function registerLampaButton() {
     try {
       if (!window.Lampa) return false;
@@ -1003,23 +1053,40 @@
                   name: "IPTV"
                 });
               }
-              if (Lampa.SettingsApi && Lampa.SettingsApi.addParam) {
-                // Some Lampa builds require both `param` and `field` objects.
-                Lampa.SettingsApi.addParam({
-                  component: "iptv_plugin_component",
-                  param: {
-                    name: "Открыть IPTV",
-                    type: "button"
-                  },
-                  field: {
-                    name: "Открыть IPTV",
-                    description: "Запуск IPTV-плеера"
-                  },
-                  onChange: function () {
-                    pluginApi.start();
-                  }
-                });
-              } else {
+
+              var onRun = function () {
+                pluginApi.start();
+              };
+
+              // 1) Plugin catalog entry (target component "plugins")
+              var addedInCatalog = addParamSafe({
+                component: "plugins",
+                param: {
+                  name: "IPTV",
+                  type: "button"
+                },
+                field: {
+                  name: "IPTV",
+                  description: "Открыть IPTV-плагин"
+                },
+                onChange: onRun
+              });
+
+              // 2) Compatibility fallback in custom settings section
+              var addedInSettings = addParamSafe({
+                component: "iptv_plugin_component",
+                param: {
+                  name: "Открыть IPTV",
+                  type: "button"
+                },
+                field: {
+                  name: "Открыть IPTV",
+                  description: "Запуск IPTV-плеера"
+                },
+                onChange: onRun
+              });
+
+              if (!addedInCatalog && !addedInSettings) {
                 addFallbackLauncherButton();
               }
             } catch (err) {
