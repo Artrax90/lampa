@@ -1,13 +1,13 @@
 // ==Lampa==
 // name: IPTV PRO Universal
-// version: 4.1.2
+// version: 4.1.3
 // ==/Lampa==
 
 (function () {
     'use strict';
 
     function IPTVUniversal() {
-        var storage_key = 'iptv_universal_v412';
+        var storage_key = 'iptv_universal_v413';
         var controller_name = 'iptv_universal';
 
         var root;
@@ -885,11 +885,13 @@
             var startY = 0;
             var moved = false;
             var started = false;
+            var touchId = null;
 
             el.on('touchstart', function (e) {
-                var t = e.originalEvent && e.originalEvent.touches ? e.originalEvent.touches[0] : null;
+                var t = e.originalEvent && e.originalEvent.changedTouches ? e.originalEvent.changedTouches[0] : null;
                 if (!t) return;
 
+                touchId = t.identifier;
                 startX = t.clientX;
                 startY = t.clientY;
                 moved = false;
@@ -897,28 +899,66 @@
             });
 
             el.on('touchmove', function (e) {
-                var t = e.originalEvent && e.originalEvent.touches ? e.originalEvent.touches[0] : null;
-                if (!started || !t) return;
+                var touches = e.originalEvent && e.originalEvent.changedTouches ? e.originalEvent.changedTouches : null;
+                var i;
+                var t = null;
+
+                if (!started || !touches) return;
+
+                for (i = 0; i < touches.length; i++) {
+                    if (touches[i].identifier === touchId) {
+                        t = touches[i];
+                        break;
+                    }
+                }
+
+                if (!t) return;
 
                 if (Math.abs(t.clientX - startX) > 12 || Math.abs(t.clientY - startY) > 12) {
                     moved = true;
                 }
             });
 
+            el.on('touchcancel', function () {
+                started = false;
+                moved = false;
+                touchId = null;
+            });
+
+            el.on('touchend', function (e) {
+                var touches = e.originalEvent && e.originalEvent.changedTouches ? e.originalEvent.changedTouches : null;
+                var i;
+                var t = null;
+
+                if (!started || !touches) return;
+
+                for (i = 0; i < touches.length; i++) {
+                    if (touches[i].identifier === touchId) {
+                        t = touches[i];
+                        break;
+                    }
+                }
+
+                if (!t) return;
+
+                if (Math.abs(t.clientX - startX) > 12 || Math.abs(t.clientY - startY) > 12) {
+                    moved = true;
+                }
+
+                if (!moved && !shouldSkipTouchAction(tag)) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    runSafe(tag, handler);
+                }
+
+                started = false;
+                moved = false;
+                touchId = null;
+            });
+
             el.on('click', function (e) {
                 e.preventDefault();
                 e.stopPropagation();
-
-                if (moved) {
-                    moved = false;
-                    started = false;
-                    return;
-                }
-
-                if (shouldSkipTouchAction(tag)) return;
-
-                started = false;
-                runSafe(tag, handler);
             });
         }
 
@@ -2253,6 +2293,7 @@
         var startX = 0;
         var startY = 0;
         var moved = false;
+        var touchId = null;
 
         if (!isTouchDeviceGlobal()) {
             el.on('click', function (e) {
@@ -2264,34 +2305,77 @@
         }
 
         el.on('touchstart', function (e) {
-            var t = e.originalEvent && e.originalEvent.touches ? e.originalEvent.touches[0] : null;
+            var t = e.originalEvent && e.originalEvent.changedTouches ? e.originalEvent.changedTouches[0] : null;
             if (!t) return;
+            touchId = t.identifier;
             startX = t.clientX;
             startY = t.clientY;
             moved = false;
         });
 
         el.on('touchmove', function (e) {
-            var t = e.originalEvent && e.originalEvent.touches ? e.originalEvent.touches[0] : null;
+            var touches = e.originalEvent && e.originalEvent.changedTouches ? e.originalEvent.changedTouches : null;
+            var i;
+            var t = null;
+
+            if (!touches) return;
+
+            for (i = 0; i < touches.length; i++) {
+                if (touches[i].identifier === touchId) {
+                    t = touches[i];
+                    break;
+                }
+            }
+
             if (!t) return;
-            if (Math.abs(t.clientX - startX) > 12 || Math.abs(t.clientY - startY) > 12) moved = true;
+
+            if (Math.abs(t.clientX - startX) > 12 || Math.abs(t.clientY - startY) > 12) {
+                moved = true;
+            }
+        });
+
+        el.on('touchcancel', function () {
+            moved = false;
+            touchId = null;
+        });
+
+        el.on('touchend', function (e) {
+            var touches = e.originalEvent && e.originalEvent.changedTouches ? e.originalEvent.changedTouches : null;
+            var i;
+            var t = null;
+            var now = Date.now();
+
+            if (!touches) return;
+
+            for (i = 0; i < touches.length; i++) {
+                if (touches[i].identifier === touchId) {
+                    t = touches[i];
+                    break;
+                }
+            }
+
+            if (!t) return;
+
+            if (Math.abs(t.clientX - startX) > 12 || Math.abs(t.clientY - startY) > 12) {
+                moved = true;
+            }
+
+            if (!moved) {
+                if (now - lastTap >= 650) {
+                    lastTap = now;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handler();
+                }
+            }
+
+            moved = false;
+            touchId = null;
         });
 
         el.on('click', function (e) {
-            var now = Date.now();
-
             e.preventDefault();
             e.stopPropagation();
-
-            if (moved) {
-                moved = false;
-                return;
-            }
-
-            if (now - lastTap < 650) return;
-            lastTap = now;
-
-            handler();
         });
     }
 
