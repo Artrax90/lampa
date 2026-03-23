@@ -967,6 +967,28 @@
     }
   };
 
+  function addFallbackLauncherButton() {
+    if (document.getElementById(PLUGIN_ID + "_launcher")) return;
+    var btn = document.createElement("button");
+    btn.id = PLUGIN_ID + "_launcher";
+    btn.textContent = "IPTV";
+    btn.style.position = "fixed";
+    btn.style.right = "12px";
+    btn.style.bottom = "12px";
+    btn.style.zIndex = "9998";
+    btn.style.background = "#2f6fe4";
+    btn.style.color = "#fff";
+    btn.style.border = "none";
+    btn.style.borderRadius = "8px";
+    btn.style.padding = "10px 14px";
+    btn.style.fontSize = "14px";
+    btn.style.cursor = "pointer";
+    btn.addEventListener("click", function () {
+      pluginApi.start();
+    });
+    document.body.appendChild(btn);
+  }
+
   function registerLampaButton() {
     try {
       if (!window.Lampa) return false;
@@ -982,19 +1004,27 @@
                 });
               }
               if (Lampa.SettingsApi && Lampa.SettingsApi.addParam) {
+                // Some Lampa builds require both `param` and `field` objects.
                 Lampa.SettingsApi.addParam({
                   component: "iptv_plugin_component",
                   param: {
                     name: "Открыть IPTV",
                     type: "button"
                   },
+                  field: {
+                    name: "Открыть IPTV",
+                    description: "Запуск IPTV-плеера"
+                  },
                   onChange: function () {
                     pluginApi.start();
                   }
                 });
+              } else {
+                addFallbackLauncherButton();
               }
             } catch (err) {
               utils.log("Settings API integration error", err);
+              addFallbackLauncherButton();
             }
           }
         });
@@ -1012,7 +1042,7 @@
   }
 
   addGlobalEntryPoint();
-  registerLampaButton();
+  if (!registerLampaButton()) addFallbackLauncherButton();
 
   // Optional auto-start on plain web page (outside Lampa) for testing.
   if (!window.Lampa) {
