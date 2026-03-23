@@ -560,24 +560,37 @@
       ovLeft.append($('<div class="iptv6-head"></div>').text(keyboardTitle));
       ovLeft.append($('<div class="iptv6-meta"></div>').text("Экранная клавиатура"));
       ovRight.append($('<div class="iptv6-head"></div>').text((keyboardMode === "add" ? "Новый плейлист" : keyboardMode === "epg" ? "EPG URL" : "Поиск") + " · " + keyboardLang.toUpperCase()));
-      ovRight.append($('<div class="iptv6-input" style="pointer-events:none"></div>').text(keyboardValue || " "));
+      var nativeInput = $('<input class="iptv6-input" />').val(keyboardValue || "");
+      nativeInput.attr("placeholder", "Введите или вставьте текст");
+      nativeInput.on("input", function () {
+        keyboardValue = safe(nativeInput.val());
+      });
+      nativeInput.on("paste", function () {
+        setTimeout(function () {
+          keyboardValue = safe(nativeInput.val());
+        }, 0);
+      });
+      ovRight.append(nativeInput);
       var grid = $('<div class="iptv6-kgrid"></div>');
       keysList().forEach(function (k, i) {
         var b = $('<div class="iptv6-item iptv6-kcell"></div>').text(k);
-        bindClick(b, function () { keyIndex = i; applyKey("char", k); });
+        bindClick(b, function () { keyIndex = i; applyKey("char", k); nativeInput.val(keyboardValue); });
         grid.append(b);
       });
       ovRight.append(grid);
       var actions = $('<div class="iptv6-kactions"></div>');
       KEY_ACTIONS.forEach(function (a, i) {
         var b = $('<div class="iptv6-item"></div>').text(a.title);
-        bindClick(b, function () { keyIndex = keysList().length + i; applyKey(a.code); });
+        bindClick(b, function () { keyIndex = keysList().length + i; applyKey(a.code); nativeInput.val(keyboardValue); });
         actions.append(b);
       });
       ovRight.append(actions);
       var close = $('<div class="iptv6-item"></div>').text("Отмена");
       bindClick(close, closeOverlay);
       ovRight.append(close);
+      setTimeout(function () {
+        try { nativeInput.focus(); } catch (e) {}
+      }, 30);
       updateFocus();
     }
     function closeOverlay() { view = "browser"; overlay.addClass("hidden"); updateFocus(); }
