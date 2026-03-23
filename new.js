@@ -1093,26 +1093,69 @@
     );
   }
 
-  function init() {
+  function openPlugin() {
     try {
-      Lampa.Component.add(COMPONENT_NAME, IPTVUniversal);
-      if ($('.menu .menu__list').find('.iptv-universal-item').length) return;
-      var item = $('<li class="menu__item selector iptv-universal-item"></li>');
+      Lampa.Activity.push({
+        title: "IPTV",
+        component: COMPONENT_NAME
+      });
+    } catch (err) {
+      log("open activity", err);
+    }
+  }
+
+  function ensureMenuItem() {
+    try {
+      if (!window.$) return false;
+      var list = $('.menu .menu__list');
+      if (!list.length && Lampa.Menu && typeof Lampa.Menu.render === "function") list = Lampa.Menu.render();
+      if (!list || !list.length) return false;
+      if (list.find('.iptv-universal-item').length) return true;
+
+      var item = $('<li class="menu__item selector iptv-universal-item" data-action="iptv"></li>');
       item.append(pluginMenuIcon());
-      item.append($('<div class="menu__text"></div>').text("IPTV PRO"));
+      item.append($('<div class="menu__text"></div>').text("IPTV"));
       item.on("hover:enter click", function (e) {
         e.preventDefault();
         e.stopPropagation();
-        try {
-          Lampa.Activity.push({
-            title: "IPTV",
-            component: COMPONENT_NAME
-          });
-        } catch (err) {
-          log("open activity", err);
+        openPlugin();
+      });
+      list.append(item);
+      return true;
+    } catch (e) {
+      log("ensureMenuItem", e);
+      return false;
+    }
+  }
+
+  function ensureSettingsFallback() {
+    try {
+      if (!Lampa.SettingsApi || !Lampa.SettingsApi.addParam) return;
+      Lampa.SettingsApi.addComponent({
+        component: "iptv_component",
+        name: "IPTV"
+      });
+      Lampa.SettingsApi.addParam({
+        component: "iptv_component",
+        param: { name: "Открыть IPTV", type: "button" },
+        field: { name: "Открыть IPTV", description: "Запуск плагина IPTV" },
+        onChange: function () {
+          openPlugin();
         }
       });
-      $('.menu .menu__list').append(item);
+    } catch (e) {
+      log("ensureSettingsFallback", e);
+    }
+  }
+
+  function init() {
+    try {
+      Lampa.Component.add(COMPONENT_NAME, IPTVUniversal);
+      ensureSettingsFallback();
+      ensureMenuItem();
+      setTimeout(ensureMenuItem, 600);
+      setTimeout(ensureMenuItem, 1600);
+      setTimeout(ensureMenuItem, 3200);
     } catch (e) {
       log("init", e);
     }
@@ -1121,7 +1164,9 @@
   if (window.appready || window.app_ready) init();
   else {
     Lampa.Listener.follow("app", function (e) {
-      if (e.type === "ready") init();
+      if (e.type === "ready" || e.type === "start") init();
+      setTimeout(ensureMenuItem, 800);
+      setTimeout(ensureMenuItem, 2500);
     });
   }
 })();
