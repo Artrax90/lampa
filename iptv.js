@@ -1,13 +1,13 @@
 // ==Lampa==
 // name: IPTV PRO Universal
-// version: 4.1.0
+// version: 4.1.1
 // ==/Lampa==
 
 (function () {
     'use strict';
 
     function IPTVUniversal() {
-        var storage_key = 'iptv_universal_v410';
+        var storage_key = 'iptv_universal_v411';
         var controller_name = 'iptv_universal';
 
         var root;
@@ -223,9 +223,10 @@
             pageFailedById: {}
         };
 
-        var DEFAULT_EPG_URL = 'https://iptvx.one/EPG_LITE';
+        var DEFAULT_EPG_URL = 'https://iptv-epg.org/files/epg-ru.xml';
         var FALLBACK_EPG_URLS = [
             'https://iptvx.one/EPG_NOARCH',
+            'https://iptvx.one/EPG_LITE',
             'https://iptvx.one/EPG'
         ];
 
@@ -459,11 +460,6 @@
             } catch (e) {
                 return false;
             }
-        }
-
-        function actionEvents() {
-            if (isTouchDevice()) return 'click';
-            return 'hover:enter hover:click click';
         }
 
         function shouldSkipTouchAction(tag) {
@@ -933,7 +929,7 @@
                 return;
             }
 
-            el.on(actionEvents(), function (e) {
+            el.on('hover:click click', function (e) {
                 e.preventDefault();
                 e.stopPropagation();
                 runSafe(tag, handler);
@@ -2167,10 +2163,13 @@
             return $(
                 '<div class="iptv-plugin-ico" aria-hidden="true">' +
                     '<svg viewBox="0 0 24 24">' +
-                        '<rect x="3.5" y="5" width="17" height="11" rx="2"></rect>' +
-                        '<path d="M9 19h6"></path>' +
-                        '<path d="M12 16v3"></path>' +
-                        '<path d="M7 8.2h10"></path>' +
+                        '<rect x="4" y="5" width="16" height="14" rx="2"></rect>' +
+                        '<path d="M8 9h8"></path>' +
+                        '<path d="M8 12h8"></path>' +
+                        '<path d="M8 15h5"></path>' +
+                        '<circle cx="6.5" cy="9" r="0.8"></circle>' +
+                        '<circle cx="6.5" cy="12" r="0.8"></circle>' +
+                        '<circle cx="6.5" cy="15" r="0.8"></circle>' +
                     '</svg>' +
                 '</div>'
             );
@@ -2260,7 +2259,7 @@
         var moved = false;
 
         if (!isTouchDeviceGlobal()) {
-            el.on('hover:enter hover:click click', function (e) {
+            el.on('hover:click click', function (e) {
                 e.preventDefault();
                 e.stopPropagation();
                 handler();
@@ -2305,10 +2304,13 @@
             '<div class="menu__ico">' +
                 '<div style="width:2rem;height:2rem;display:flex;align-items:center;justify-content:center;">' +
                     '<svg viewBox="0 0 24 24" style="width:1.65rem;height:1.65rem;display:block;fill:none;stroke:#fff;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;">' +
-                        '<rect x="3.5" y="5" width="17" height="11" rx="2"></rect>' +
-                        '<path d="M9 19h6"></path>' +
-                        '<path d="M12 16v3"></path>' +
-                        '<path d="M7 8.2h10"></path>' +
+                        '<rect x="4" y="5" width="16" height="14" rx="2"></rect>' +
+                        '<path d="M8 9h8"></path>' +
+                        '<path d="M8 12h8"></path>' +
+                        '<path d="M8 15h5"></path>' +
+                        '<circle cx="6.5" cy="9" r="0.8"></circle>' +
+                        '<circle cx="6.5" cy="12" r="0.8"></circle>' +
+                        '<circle cx="6.5" cy="15" r="0.8"></circle>' +
                     '</svg>' +
                 '</div>' +
             '</div>'
