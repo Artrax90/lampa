@@ -1,13 +1,13 @@
 // ==Lampa==
 // name: IPTV PRO Universal
-// version: 4.1.3
+// version: 4.1.4
 // ==/Lampa==
 
 (function () {
     'use strict';
 
     function IPTVUniversal() {
-        var storage_key = 'iptv_universal_v413';
+        var storage_key = 'iptv_universal_v414';
         var controller_name = 'iptv_universal';
 
         var root;
@@ -468,7 +468,7 @@
 
             var now = Date.now();
 
-            if (lastTouchAction.tag === tag && (now - lastTouchAction.time) < 650) {
+            if (lastTouchAction.tag === tag && (now - lastTouchAction.time) < 450) {
                 return true;
             }
 
@@ -828,7 +828,7 @@
 
             $('head').append(
                 '<style id="iptv-universal-style">' +
-                '.iptv-root{position:fixed;top:0;left:0;right:0;bottom:0;z-index:1000;background:#0b0d10;color:#fff;padding-top:5rem;overflow:hidden;}' +
+                '.iptv-root{position:fixed;top:0;left:0;right:0;bottom:0;z-index:1000;background:#0b0d10;color:#fff;padding-top:5rem;overflow:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;touch-action:pan-y;}' +
                 '.iptv-layout{display:flex;width:100%;height:100%;}' +
                 '.iptv-col{height:100%;overflow-y:auto;box-sizing:border-box;background:rgba(255,255,255,0.02);border-right:1px solid rgba(255,255,255,0.08);-webkit-overflow-scrolling:touch;touch-action:pan-y;overscroll-behavior:contain;}' +
                 '.iptv-left{width:23rem;}' +
@@ -836,7 +836,7 @@
                 '.iptv-right{width:26rem;padding:1.5rem;border-right:none;background:#080a0d;}' +
                 '.iptv-head{padding:1rem;font-size:1.25rem;font-weight:700;display:flex;align-items:center;gap:0.75rem;}' +
                 '.iptv-sub{padding:0 1rem 0.75rem 1rem;color:rgba(255,255,255,0.6);font-size:0.92rem;}' +
-                '.iptv-item,.iptv-key,.iptv-kbtn,.iptv-tab{margin:0.35rem;padding:0.95rem;border-radius:0.55rem;background:rgba(255,255,255,0.05);cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;touch-action:pan-y manipulation;}' +
+                '.iptv-item,.iptv-key,.iptv-kbtn,.iptv-tab{margin:0.35rem;padding:0.95rem;border-radius:0.55rem;background:rgba(255,255,255,0.05);cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;touch-action:auto;}' +
                 '.iptv-item.active,.iptv-key.active,.iptv-kbtn.active,.iptv-tab.active{background:#2962ff!important;}' +
                 '.iptv-row{display:flex;align-items:center;gap:0.75rem;min-width:0;}' +
                 '.iptv-logo{width:2.2rem;height:2.2rem;object-fit:contain;flex:0 0 2.2rem;border-radius:0.4rem;background:rgba(255,255,255,0.04);}' +
@@ -852,10 +852,10 @@
                 '.iptv-epg-line{margin-bottom:0.45rem;word-break:break-word;}' +
                 '.iptv-epg-line:last-child{margin-bottom:0;}' +
                 '.iptv-epg-label{display:inline-block;min-width:4rem;color:rgba(255,255,255,0.6);}' +
-                '.iptv-overlay{position:absolute;top:5rem;left:0;right:0;bottom:0;background:#0b0d10;display:flex;z-index:10;}' +
+                '.iptv-overlay{position:absolute;top:5rem;left:0;right:0;bottom:0;background:#0b0d10;display:flex;z-index:10;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;touch-action:pan-y;}' +
                 '.iptv-overlay.hidden{display:none;}' +
-                '.iptv-overlay-left{width:28rem;overflow-y:auto;border-right:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);touch-action:pan-y;overscroll-behavior:contain;}' +
-                '.iptv-overlay-right{flex:1;overflow-y:auto;padding:1.5rem;}' +
+                '.iptv-overlay-left{width:28rem;overflow-y:auto;border-right:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);-webkit-overflow-scrolling:touch;touch-action:pan-y;overscroll-behavior:contain;}' +
+                '.iptv-overlay-right{flex:1;overflow-y:auto;padding:1.5rem;-webkit-overflow-scrolling:touch;touch-action:pan-y;overscroll-behavior:contain;}' +
                 '.iptv-display{padding:1rem;border-radius:0.55rem;background:rgba(255,255,255,0.06);min-height:3rem;margin-bottom:1rem;word-break:break-all;}' +
                 '.iptv-keyboard{display:grid;grid-template-columns:repeat(10,1fr);gap:0.45rem;}' +
                 '.iptv-key{margin:0;padding:0.8rem 0.3rem;text-align:center;}' +
@@ -880,97 +880,13 @@
             );
         }
 
-        function attachTouchTap(el, tag, handler) {
-            var startX = 0;
-            var startY = 0;
-            var moved = false;
-            var started = false;
-            var touchId = null;
-
-            el.on('touchstart', function (e) {
-                var t = e.originalEvent && e.originalEvent.changedTouches ? e.originalEvent.changedTouches[0] : null;
-                if (!t) return;
-
-                touchId = t.identifier;
-                startX = t.clientX;
-                startY = t.clientY;
-                moved = false;
-                started = true;
-            });
-
-            el.on('touchmove', function (e) {
-                var touches = e.originalEvent && e.originalEvent.changedTouches ? e.originalEvent.changedTouches : null;
-                var i;
-                var t = null;
-
-                if (!started || !touches) return;
-
-                for (i = 0; i < touches.length; i++) {
-                    if (touches[i].identifier === touchId) {
-                        t = touches[i];
-                        break;
-                    }
-                }
-
-                if (!t) return;
-
-                if (Math.abs(t.clientX - startX) > 12 || Math.abs(t.clientY - startY) > 12) {
-                    moved = true;
-                }
-            });
-
-            el.on('touchcancel', function () {
-                started = false;
-                moved = false;
-                touchId = null;
-            });
-
-            el.on('touchend', function (e) {
-                var touches = e.originalEvent && e.originalEvent.changedTouches ? e.originalEvent.changedTouches : null;
-                var i;
-                var t = null;
-
-                if (!started || !touches) return;
-
-                for (i = 0; i < touches.length; i++) {
-                    if (touches[i].identifier === touchId) {
-                        t = touches[i];
-                        break;
-                    }
-                }
-
-                if (!t) return;
-
-                if (Math.abs(t.clientX - startX) > 12 || Math.abs(t.clientY - startY) > 12) {
-                    moved = true;
-                }
-
-                if (!moved && !shouldSkipTouchAction(tag)) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    runSafe(tag, handler);
-                }
-
-                started = false;
-                moved = false;
-                touchId = null;
-            });
-
-            el.on('click', function (e) {
-                e.preventDefault();
-                e.stopPropagation();
-            });
-        }
-
         function bindAction(el, tag, handler) {
-            if (isTouchDevice()) {
-                attachTouchTap(el, tag, handler);
-                return;
-            }
-
             el.on('click', function (e) {
                 e.preventDefault();
                 e.stopPropagation();
+
+                if (shouldSkipTouchAction(tag)) return;
+
                 runSafe(tag, handler);
             });
         }
@@ -2289,93 +2205,10 @@
     }
 
     function bindMenuAction(el, handler) {
-        var lastTap = 0;
-        var startX = 0;
-        var startY = 0;
-        var moved = false;
-        var touchId = null;
-
-        if (!isTouchDeviceGlobal()) {
-            el.on('click', function (e) {
-                e.preventDefault();
-                e.stopPropagation();
-                handler();
-            });
-            return;
-        }
-
-        el.on('touchstart', function (e) {
-            var t = e.originalEvent && e.originalEvent.changedTouches ? e.originalEvent.changedTouches[0] : null;
-            if (!t) return;
-            touchId = t.identifier;
-            startX = t.clientX;
-            startY = t.clientY;
-            moved = false;
-        });
-
-        el.on('touchmove', function (e) {
-            var touches = e.originalEvent && e.originalEvent.changedTouches ? e.originalEvent.changedTouches : null;
-            var i;
-            var t = null;
-
-            if (!touches) return;
-
-            for (i = 0; i < touches.length; i++) {
-                if (touches[i].identifier === touchId) {
-                    t = touches[i];
-                    break;
-                }
-            }
-
-            if (!t) return;
-
-            if (Math.abs(t.clientX - startX) > 12 || Math.abs(t.clientY - startY) > 12) {
-                moved = true;
-            }
-        });
-
-        el.on('touchcancel', function () {
-            moved = false;
-            touchId = null;
-        });
-
-        el.on('touchend', function (e) {
-            var touches = e.originalEvent && e.originalEvent.changedTouches ? e.originalEvent.changedTouches : null;
-            var i;
-            var t = null;
-            var now = Date.now();
-
-            if (!touches) return;
-
-            for (i = 0; i < touches.length; i++) {
-                if (touches[i].identifier === touchId) {
-                    t = touches[i];
-                    break;
-                }
-            }
-
-            if (!t) return;
-
-            if (Math.abs(t.clientX - startX) > 12 || Math.abs(t.clientY - startY) > 12) {
-                moved = true;
-            }
-
-            if (!moved) {
-                if (now - lastTap >= 650) {
-                    lastTap = now;
-                    e.preventDefault();
-                    e.stopPropagation();
-                    handler();
-                }
-            }
-
-            moved = false;
-            touchId = null;
-        });
-
         el.on('click', function (e) {
             e.preventDefault();
             e.stopPropagation();
+            handler();
         });
     }
 
